@@ -1,37 +1,54 @@
 # Board-support port (do this first)
 
-The 5" Waveshare board is NOT in the muse-gadget-sdk's supported-board list (list verified from
-the SDK README, commit b1a3822: AMOLED-1.75C/1.75, ESP32-BOX-3, reTerminal E1001, SenseCAP
-Indicator/Watcher, HA Voice PE, ideaspark, AiPi Lite, M5Stack StickS3/StopWatch/StickC Plus2,
-Cardputer ADV). Nothing else works until this port exists.
+The 5" Waveshare board isn't in the muse-gadget-sdk yet, but the SDK already supports the
+**Waveshare ESP32-S3-Touch-LCD-7**, which shares this board's panel interface, pins, GT911 touch,
+CH422G expander, flash and PSRAM (details in `01-hardware.md`). The port is a copy of the LCD-7
+port with a few values changed — not a new driver.
+
+Follow `esp32/devices/AGENTS.md` in the SDK (the "add a board" recipe for boards with the full UI).
 
 ## What the port consists of
 
-Following the SDK's existing convention (see the SDK `esp32/` README "Boards" table and the
-`devices/` feature table):
+Boards with the full UI use three pieces. Copy each from the LCD-7 equivalent:
 
-1. **New board entry under `tools/board.sh`** (suggested name: `waveshare-5inch-lcd`) with
-   sdkconfig defaults: ESP32-S3 target, 16 MB flash, OPI PSRAM enabled. Use a few-MB app
-   partition — leave room for the framebuffer in PSRAM, not flash.
-2. **Device descriptor in `devices/`** mapping:
-   - Display: RGB565 panel via `esp_lcd_panel_rgb` with the pin map and timing in `01-hardware.md`.
-     **No display init table is needed** (ST7262 is pure timing-driven, unlike ST7701/ST77916).
-   - Touch: `esp_lcd_touch_gt911` on the I2C pins from `01-hardware.md`, with the ~60 ms
-     debounce described there.
-   - Backlight: a small CH422G output driver (ON/OFF only). Do NOT reuse TCA9554/PCA9554 code —
-     the CH422G protocol is non-standard (fixed 7-bit address per function, no register pointer).
-3. **SDK settings UI**: the board can't dim, so expose a backlight TOGGLE, not a brightness
-   slider. (Open question: add it to the SDK settings UI, or leave backlight always-on for v1 —
-   see `05-open-questions.md`.)
+1. **Overlay** `devices/sdkconfig.muse-waveshare-s3-lcd5` from
+   `devices/sdkconfig.muse-waveshare-s3-lcd7`. Set the new board's Kconfig symbol (e.g.
+   `CONFIG_MUSE_BOARD_WAVESHARE_S3_LCD5=y`) and add it to `components/muse/Kconfig` wherever
+   `MUSE_BOARD_WAVESHARE_S3_LCD7` appears (the board choice, the board-name default, and the
+   UART-console default), plus the `elseif` in `components/muse/CMakeLists.txt`. Keep: ESP32-S3, 16 MB flash, octal PSRAM, `CONFIG_LCD_RGB_RESTART_IN_VSYNC=y`.
+   Check the console setting (`CONFIG_ESP_CONSOLE_UART_DEFAULT` on the LCD-7) against the
+   5" board's USB bridge.
+2. **Board file** `components/muse/boards/board_waveshare_s3_lcd5.c` from
+   `board_waveshare_s3_lcd7.c`. Change:
+   - `vsync_back_porch` and `vsync_front_porch` to 16 (LCD-7 uses 8).
+   - `.name = "Waveshare ESP32-S3-Touch-LCD-5"`, `.diagonal_in = 5.0f`, and `avatar_px` if the
+     avatar looks too large.
+   - Anything the 5" demo shows differently in the CH422G bit map (touch reset, backlight, LCD reset).
+   - Keep: the GT911 address-select dance on GPIO4, `poll_buttons` returning 0 (GPIO0 is
+     an RGB data line), touch-confirmed pairing, and backlight as an on/off switch in
+     `set_brightness`.
+3. **Helper entry** in `tools/muse/board.sh` (e.g. `lcd5) profile=waveshare-s3-lcd5; target=esp32s3 ;;`),
+   the USB descriptor in `tools/muse/ports.py` if the bridge differs, and a row in
+   `devices/README.md`.
+
+Backlight: the LCD-7 port already maps the SDK's brightness setting to on/off, so the settings
+UI needs no new toggle.
+
+## ⚠️ Variant check first
+
+If the board turns out to be the 1024x600 "5B", stop: resolution and timing differ and the
+copy isn't valid as-is. Check the sticker at unboxing.
 
 ## UI layout note
 
-800x480 is a landscape widescreen; the SDK's touch UI layout was designed for round/small
-AMOLEDs. Expect a layout pass for the todo list — this is normal, not a bug in your port.
+800x480 is landscape; the SDK's avatar UI is centred for round/small screens, but the LCD-7
+port already runs it at 800x480, so expect the stock UI to look like the LCD-7's.
 
 ## Acceptance criteria
 
-- `idf.py` / `tools/board.sh waveshare-5inch-lcd build` completes against ESP-IDF v6.0.1.
-- Flashing the SDK's stock demo UI shows a stable picture with working touch on the 5" board.
-- Backlight toggles on/off without crashing the I2C bus.
-- Simulator (`esp32/simulator/`) still builds and runs (don't break the desktop path).
+- `tools/muse/board.sh build lcd5` completes against ESP-IDF v6.0.1, with the size check under
+  the slot limit.
+- Flashing shows the stock UI with a stable picture and working touch; touch confirms pairing.
+- Boot log names the board (`muse: board: Waveshare ESP32-S3-Touch-LCD-5`).
+- Backlight switches on/off without upsetting the I2C bus.
+- The SDK host tests pass, and the simulator (`esp32/simulator/`) still builds.
