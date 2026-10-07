@@ -142,6 +142,20 @@ static void script_touch_read(lv_indev_t *indev, lv_indev_data_t *data)
     data->state = g.touch_down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 }
 
+/*
+ * SDL keeps reporting the mouse while a drag leaves the window, which LVGL
+ * logs as a warning on every frame. A real panel can't report off-screen
+ * points, so clamp to the window like the touch controller would.
+ */
+static lv_indev_read_cb_t s_sdl_mouse_read;
+
+static void clamped_mouse_read(lv_indev_t *indev, lv_indev_data_t *data)
+{
+    s_sdl_mouse_read(indev, data);
+    data->point.x = LV_CLAMP(0, data->point.x, SCREEN_W - 1);
+    data->point.y = LV_CLAMP(0, data->point.y, SCREEN_H - 1);
+}
+
 /* ---- main loop ----------------------------------------------------------- */
 
 static void frame(void)
@@ -568,7 +582,9 @@ int main(int argc, char **argv)
     lv_tick_set_cb(tick_cb);
     lv_sdl_window_set_title(g.display, "Muse Todo Display (800x480)");
     lv_sdl_window_set_resizeable(g.display, false);
-    lv_sdl_mouse_create();
+    lv_indev_t *mouse = lv_sdl_mouse_create();
+    s_sdl_mouse_read = lv_indev_get_read_cb(mouse);
+    lv_indev_set_read_cb(mouse, clamped_mouse_read);
     g.script_touch = lv_indev_create();
     lv_indev_set_type(g.script_touch, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(g.script_touch, script_touch_read);
