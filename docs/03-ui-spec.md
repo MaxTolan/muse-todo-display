@@ -39,7 +39,7 @@ all done, idle) before calling UI work done.
 
 ## Item lifecycle
 
-1. **Tap.** Tapping a manual item's row fills the checkbox and starts the **undo window**
+1. **Tap.** Tapping a tappable item's row fills the checkbox and starts the **undo window**
    (default 5 s). The row shows a small "Undo" button. Debounce: ignore repeat taps on the same
    row within ~300 ms.
 2. **Undo.** Tapping "Undo" inside the window returns the item to open. Nothing was sent.
@@ -57,7 +57,11 @@ all done, idle) before calling UI work done.
 Items Muse marks done (HealthKit and other auto sources) skip the outbox: the row shows
 crossed out with its source tag for a few seconds, then fades out. No message is sent.
 
-Only items with `source: "manual"` are tappable. Auto items are display-only until Muse marks them.
+Tappable items: `source: "manual"`, and `source: "healthkit"` as a manual backup for when
+HealthKit is slow to sync (owner's choice, Oct 7). A hand-ticked HealthKit item goes through the
+same undo window and outbox, and its message says it was marked by hand (see
+`04-agent-integration.md`). Other auto sources (e.g. `myfitnesspal`) are display-only until Muse
+marks them.
 
 ## List updates
 
@@ -86,7 +90,8 @@ screen — time/date and "waiting for today's list" — never an error dump.
 ## Item types (examples — the firmware must not hard-code these)
 
 The device renders whatever Muse sends. Behaviour depends only on `source`
-(`manual` → tappable; anything else → display-only, shown with a source tag).
+(`manual` and `healthkit` → tappable; anything else → display-only. Non-manual items show a
+source tag).
 
 | Item | `source` | Notes |
 | --- | --- | --- |

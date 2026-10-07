@@ -385,7 +385,7 @@ static void row_apply(row_t *r, const todo_item_t *it)
     bool tick = false;
     switch (st) {
     case TODO_ROW_OPEN:
-        ring = it->manual ? C_PINK : C_FAINT;
+        ring = it->tappable ? C_PINK : C_FAINT;
         break;
     case TODO_ROW_UNDO:
         fill = C_PINK;
@@ -409,7 +409,7 @@ static void row_apply(row_t *r, const todo_item_t *it)
         break;
     }
     lv_obj_set_style_border_color(r->check, col(ring), 0);
-    lv_obj_set_style_border_opa(r->check, it->manual || st != TODO_ROW_OPEN ? LV_OPA_COVER : LV_OPA_60, 0);
+    lv_obj_set_style_border_opa(r->check, it->tappable || st != TODO_ROW_OPEN ? LV_OPA_COVER : LV_OPA_60, 0);
     lv_obj_set_style_bg_color(r->check, col(fill), 0);
     lv_obj_set_style_bg_opa(r->check, fill_opa, 0);
     show(r->check_icon, tick);
@@ -428,7 +428,7 @@ static void row_apply(row_t *r, const todo_item_t *it)
     set_text(r->note, note);
     show(r->note, note[0] != '\0');
 
-    bool tappable = it->manual && st == TODO_ROW_OPEN;
+    bool tappable = it->tappable && st == TODO_ROW_OPEN;
     if (tappable) {
         lv_obj_add_flag(r->row, LV_OBJ_FLAG_CLICKABLE);
     } else {

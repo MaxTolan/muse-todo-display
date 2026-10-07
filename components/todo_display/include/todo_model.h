@@ -43,7 +43,7 @@ extern "C" {
 #define TODO_GIVE_UP_S (24 * 60 * 60)
 
 typedef enum {
-    TODO_ROW_OPEN,      /* waiting to be done (tappable if manual) */
+    TODO_ROW_OPEN,      /* waiting to be done (tappable if the source allows) */
     TODO_ROW_UNDO,      /* tapped; undo window running, nothing sent */
     TODO_ROW_QUEUED,    /* crossed out, in the outbox, not yet sent */
     TODO_ROW_SENDING,   /* crossed out, part of the chat turn in flight */
@@ -56,7 +56,8 @@ typedef struct {
     char id[TODO_ID_MAX + 1];
     char label[TODO_LABEL_MAX + 1];
     char source[TODO_SOURCE_MAX + 1];
-    bool manual;     /* source == "manual": tappable */
+    bool manual;     /* source == "manual" */
+    bool tappable;   /* the owner can tick it off (see todo_source_tappable) */
     bool in_list;    /* present in Muse's latest push */
     bool muse_done;  /* Muse says it's done */
     todo_row_state_t state;
@@ -174,6 +175,13 @@ bool todo_model_list_result(const todo_model_t *m, char *out, size_t len);
  * otherwise 5 minutes. Characters, not bytes, so accented text counts fairly.
  */
 uint32_t todo_message_hold_ms(const char *text);
+
+/*
+ * Whether items from a source can be ticked off by hand: "manual", plus
+ * "healthkit" as a backup for when HealthKit is slow to sync (owner's choice).
+ * Other sources stay display-only until Muse marks them.
+ */
+bool todo_source_tappable(const char *source);
 
 /* Friendly name for a source tag ("healthkit" -> "HealthKit"). */
 const char *todo_source_label(const char *source);

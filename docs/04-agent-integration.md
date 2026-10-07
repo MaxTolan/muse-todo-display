@@ -31,8 +31,9 @@ day (HealthKit completions, new reminders, edits).
   - `id` — unique **per occurrence**, not per habit: daily items need the date in the ID so
     today's completion can't be mistaken for yesterday's. Muse generates IDs; the device only
     echoes them back.
-  - `source` — free-form string: `manual`, `healthkit`, `myfitnesspal`, or anything new. Only
-    `manual` items are tappable; any other value is shown as a tag. New sources need no
+  - `source` — free-form string: `manual`, `healthkit`, `myfitnesspal`, or anything new.
+    `manual` and `healthkit` items are tappable (HealthKit as a backup when it's slow to sync);
+    any non-manual value is shown as a tag. New sources need no
     firmware change.
   - `done` — `true` for items Muse already considers complete.
 - Returns `{"ok": true, "payload": {"shown": N, "pending": [ids in the outbox]}}`.
@@ -69,11 +70,19 @@ One line per completion, item ID included so Muse can ignore repeats:
 [todo-display] Completed: Vitamins AM (id vitamins-am@2026-10-05) at 9:14 AM.
 ```
 
+A HealthKit item ticked by hand (because HealthKit hadn't synced yet) says so:
+
+```
+[todo-display] Completed: 10,000 steps (id steps@2026-10-05) at 6:10 PM, marked by hand before HealthKit caught up.
+```
+
 If several completions are waiting, send them in one turn, one line each.
 
 Muse needs a standing instruction (set up by the owner in Muse, not in firmware), roughly:
 *"Messages starting with [todo-display] are completions from my desk display. Record each
-item ID once and ignore IDs you've already recorded. Reply in one short sentence."*
+item ID once and ignore IDs you've already recorded. If one says it was marked by hand before
+HealthKit caught up, count it as done now, and don't count it again when HealthKit syncs.
+Reply in one short sentence."*
 
 ### The outbox
 

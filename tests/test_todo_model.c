@@ -195,9 +195,64 @@ static void test_tap_undo(void)
     CHECK(state_of("rosary@1007") == TODO_ROW_OPEN);
     CHECK(F.sends == 0); /* undo never sends anything */
 
-    /* Auto items aren't tappable. */
-    CHECK(!todo_model_tap(&M, "steps@1007", T));
     CHECK(!todo_model_tap(&M, "nope", T));
+}
+
+static void test_healthkit_backup_tap(void)
+{
+    setup("healthkit_backup_tap");
+    push("[{\"id\":\"steps@1007\",\"label\":\"10,000 steps\",\"source\":\"healthkit\"},"
+         "{\"id\":\"protein@1007\",\"label\":\"180 g protein\",\"source\":\"myfitnesspal\"},"
+         "{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\"}]");
+    CHECK(todo_model_find(&M, "steps@1007")->tappable);
+    CHECK(todo_model_find(&M, "rosary@1007")->tappable);
+
+    /* Other auto sources stay display-only. */
+    CHECK(!todo_model_find(&M, "protein@1007")->tappable);
+    CHECK(!todo_model_tap(&M, "protein@1007", T));
+
+    /* HealthKit is lagging: tick it by hand. Same undo window, then it's sent. */
+    CHECK(todo_model_tap(&M, "steps@1007", T));
+    run(2000);
+    CHECK(todo_model_undo(&M, "steps@1007", T));
+    run(400);
+    CHECK(todo_model_tap(&M, "steps@1007", T));
+    run(TODO_UNDO_MS + 100);
+    CHECK(F.sends == 1);
+    CHECK_STR(F.last_turn, "[todo-display] Completed: 10,000 steps (id steps@1007) at 9:14 AM, "
+                           "marked by hand before HealthKit caught up.");
+
+    /* HealthKit catches up mid-send: the local completion still wins until Muse replies. */
+    CHECK(push("[{\"id\":\"steps@1007\",\"label\":\"10,000 steps\",\"source\":\"healthkit\",\"done\":true},"
+               "{\"id\":\"protein@1007\",\"label\":\"180 g protein\",\"source\":\"myfitnesspal\"},"
+               "{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\"}]"));
+    CHECK(state_of("steps@1007") == TODO_ROW_SENDING);
+    todo_model_turn_done(&M, T);
+    run(TODO_LEAVE_MS + 40);
+    CHECK(state_of("steps@1007") == TODO_ROW_HIDDEN);
+    int done, total;
+    todo_model_progress(&M, &done, &total);
+    CHECK(done == 1 && total == 3);
+
+    /* Manual items keep the plain wording. */
+    todo_model_tap(&M, "rosary@1007", T);
+    run(TODO_UNDO_MS + 100);
+    CHECK_STR(F.last_turn, "[todo-display] Completed: Rosary (id rosary@1007) at 9:14 AM.");
+
+    /* A list that only has HealthKit left celebrates when it's ticked by hand. */
+    setup("healthkit_backup_tap/celebrate");
+    push("[{\"id\":\"s\",\"label\":\"Steps\",\"source\":\"healthkit\"}]");
+    CHECK(todo_model_tap(&M, "s", T));
+    run(TODO_UNDO_MS + 40);
+    CHECK(todo_model_screen(&M) == TODO_SCREEN_CELEBRATE);
+
+    /* Tappability survives a reboot. */
+    setup("healthkit_backup_tap/reboot");
+    push("[{\"id\":\"s\",\"label\":\"Steps\",\"source\":\"healthkit\"}]");
+    char blob[4096];
+    snprintf(blob, sizeof(blob), "%s", F.saved);
+    CHECK(todo_model_restore(&M, blob, T));
+    CHECK(todo_model_find(&M, "s")->tappable);
 }
 
 static void test_debounce(void)
@@ -552,6 +607,7 @@ int main(void)
     test_validation();
     test_tap_undo();
     test_debounce();
+    test_healthkit_backup_tap();
     test_commit_send_reply();
     test_batching();
     test_refused_retry();

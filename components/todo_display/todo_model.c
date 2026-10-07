@@ -120,6 +120,11 @@ static void remove_at(todo_model_t *m, size_t i)
     m->count--;
 }
 
+bool todo_source_tappable(const char *source)
+{
+    return source && (!strcmp(source, "manual") || !strcmp(source, "healthkit"));
+}
+
 const char *todo_source_label(const char *source)
 {
     if (!source || !strcmp(source, "manual")) {
@@ -244,6 +249,7 @@ bool todo_model_restore(todo_model_t *m, const char *blob, uint32_t now_ms)
         copy_str(it->label, sizeof(it->label), label);
         copy_str(it->source, sizeof(it->source), source);
         it->manual = !strcmp(it->source, "manual");
+        it->tappable = todo_source_tappable(it->source);
         it->in_list = get_bool(o, "in_list");
         it->muse_done = get_bool(o, "done");
         it->completed_at = (time_t)get_num(o, "at");
@@ -379,6 +385,7 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
         flatten(it->label);
         copy_str(it->source, sizeof(it->source), source);
         it->manual = !strcmp(source, "manual");
+        it->tappable = todo_source_tappable(source);
         it->in_list = true;
         it->muse_done = muse_done;
 
@@ -404,7 +411,7 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
                 }
                 break;
             }
-            if (!it->manual && it->state == TODO_ROW_UNDO) {
+            if (!it->tappable && it->state == TODO_ROW_UNDO) {
                 set_state(it, TODO_ROW_OPEN, now_ms); /* became display-only */
             }
         }
@@ -466,7 +473,7 @@ bool todo_model_show_message(todo_model_t *m, const char *text, uint32_t now_ms,
 bool todo_model_tap(todo_model_t *m, const char *id, uint32_t now_ms)
 {
     todo_item_t *it = find_mut(m, id);
-    if (!it || !it->manual || it->state != TODO_ROW_OPEN) {
+    if (!it || !it->tappable || it->state != TODO_ROW_OPEN) {
         return false;
     }
     if (it->tap_ms && !elapsed(now_ms, it->tap_ms, TODO_TAP_DEBOUNCE_MS)) {
@@ -519,7 +526,7 @@ static char *build_turn(const todo_model_t *m)
     size_t cap = 1;
     for (size_t i = 0; i < m->count; i++) {
         if (m->items[i].state == TODO_ROW_QUEUED) {
-            cap += 64 + strlen(m->items[i].label) + strlen(m->items[i].id);
+            cap += 128 + strlen(m->items[i].label) + strlen(m->items[i].id) + strlen(m->items[i].source);
         }
     }
     char *text = malloc(cap);
@@ -535,8 +542,14 @@ static char *build_turn(const todo_model_t *m)
         }
         char when[24];
         format_clock(it->completed_at, when, sizeof(when));
-        used += (size_t)snprintf(text + used, cap - used, "%s[todo-display] Completed: %s (id %s)%s.",
-                                 used ? "\n" : "", it->label, it->id, when);
+        /* A hand-ticked auto item (HealthKit lagging) says so, so Muse knows the data isn't in yet. */
+        char by_hand[TODO_SOURCE_MAX + 48] = "";
+        if (!it->manual) {
+            snprintf(by_hand, sizeof(by_hand), ", marked by hand before %s caught up",
+                     todo_source_label(it->source));
+        }
+        used += (size_t)snprintf(text + used, cap - used, "%s[todo-display] Completed: %s (id %s)%s%s.",
+                                 used ? "\n" : "", it->label, it->id, when, by_hand);
     }
     return text;
 }
