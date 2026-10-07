@@ -1,0 +1,4 @@
+/build/
+.DS_Store
+# Simulator screenshots from interactive runs (P key)
+todo-sim.png
