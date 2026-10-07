@@ -51,16 +51,36 @@ pushes. New item sources need no firmware change (see the `source` field in `04`
 - GPIO0 (BOOT) is an RGB data line on this board, so the BOOT button can't be read while the
   screen runs. Pairing is confirmed by touch, as on the SDK's LCD-7 port.
 
-## Current status (as of Oct 5, 2026)
+## Current status (as of Oct 7, 2026)
 
 - Hardware ordered Oct 2; the 5" board arrives ~Oct 13–15, 2026. Stand has arrived.
-- Firmware not started.
+- **Todo UI done on the simulator** (priority 3, ahead of hardware): model, screen, celebration
+  (issue #1) and an 800x480 simulator with scripted scenarios. Previews: `docs/previews/`.
+  Code layout and how to run it: "Repo layout" below and `sim/README.md`.
+- Not started: board port (needs the board), integration spike, firmware glue for the
+  commands/outbox (`04-agent-integration.md`). The model already implements the outbox logic;
+  the firmware only has to wire it to `muse_hatch_text_turn`, turn events and NVS.
 - Push direction (Muse → device) uses the SDK's documented custom-command mechanism.
   Device → Muse uses typed chat turns. The one unverified piece is whether Muse will call a
   device command on a schedule — that's the spike.
-- The SDK simulator (`esp32/simulator/`) is a fixed 412x412 window. It's fine for logic and
-  behavior, but the 800x480 layout needs either a simulator size change or hardware.
-- Open GitHub issues: #1 (completion celebration), #2 (task entry).
+- Open GitHub issues: #1 (completion celebration — built, see previews 10–12), #2 (task entry).
+
+## Repo layout
+
+- `third_party/muse-gadget-sdk/` — the SDK as a pinned git submodule (owner decision, Oct 7).
+  Run `git submodule update --init` after cloning.
+- `components/todo_display/` — the todo code as an ESP-IDF component:
+  - `todo_model.c` — list, item lifecycle, undo window, outbox, retry/backoff, persistence blob.
+    Plain C + cJSON, no LVGL/ESP-IDF, so it's unit-tested on the host.
+  - `todo_ui.c` — the LVGL 9.5 screen. Renders the model; owns no state; all animation is
+    driven by the time passed in, so scripted runs are pixel-identical every time.
+  - `todo_mascot.c` — the SDK's pixel Muse (`avatar/muse_pixel.c`) with a pixel top hat.
+- `sim/` — 800x480 SDL simulator (owner decision: our own sim, no SDK changes).
+- `tests/` — model unit tests (`test_todo_model.c`) and simulator scenario tests (`test_sim.py`).
+- `tools/sim.sh` — build / test / run / render previews.
+
+The todo screen is the device's **main screen**; the SDK's avatar and settings screens stay for
+pairing and Wi-Fi setup (owner decision, Oct 7).
 
 ## How to work
 

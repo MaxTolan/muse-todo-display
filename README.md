@@ -24,10 +24,13 @@ short messages to the screen.
 
 ## Status
 
-Hardware ordered Oct 2, 2026. Firmware not started; board arrives ~Oct 13–15. Both directions
-of the Muse link use documented SDK mechanisms (custom commands in, typed chat turns out); the
-remaining unknown is whether Muse calls device commands on a schedule — a small spike settles
-it. UI logic can start now on the SDK's desktop simulator (412x412 window).
+Hardware ordered Oct 2, 2026; board arrives ~Oct 13–15. The todo UI runs on an 800x480
+desktop simulator (`tools/sim.sh run`) with unit and screenshot tests (`tools/sim.sh test`).
+Firmware glue and the board port come next. Both directions of the Muse link use documented
+SDK mechanisms (custom commands in, typed chat turns out); the remaining unknown is whether
+Muse calls device commands on a schedule — a small spike settles it.
+
+![Previews](docs/previews/contact-sheet.png)
 
 ## SDK
 

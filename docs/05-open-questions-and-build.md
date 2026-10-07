@@ -8,10 +8,8 @@
    text entry.
 4. **Celebration artwork**: the two-second top-hat Muse animation is specified; the exact
    artwork is up to whoever implements it — keep it simple and charming.
-5. **Code location**: is this repo a fork of the SDK, or does it bring the SDK in (submodule /
-   pinned commit) with the todo code as a component? And does the todo screen replace the
-   SDK's avatar screen or sit alongside it (e.g. avatar while pairing/idle, list otherwise)?
-6. **Simulator**: change the SDK simulator to 800x480 for layout work, or do layout on hardware?
+5. ~~Code location~~ — decided Oct 7, see below.
+6. ~~Simulator~~ — decided Oct 7, see below.
 
 ## Decided
 
@@ -24,6 +22,29 @@
 - Items carry a free-form `source` field; new sources need no firmware change. Protein and
   fiber simply aren't sent until the MyFitnessPal connection exists.
 - Backlight: on/off only (hardware limit); uses the SDK's existing brightness setting as a switch.
+- Code location (Oct 7): the SDK is a pinned git submodule at `third_party/muse-gadget-sdk`;
+  the todo code is its own component (`components/todo_display`). SDK changes needed for the
+  board port and commands go in as small patches/upstream PRs, not a fork.
+- Main screen (Oct 7): the todo screen is the home screen; the SDK's avatar/settings screens
+  are used for pairing and Wi-Fi setup.
+- Simulator (Oct 7): this repo has its own 800x480 simulator (`sim/`) with the same LVGL/SDL
+  pins as the SDK's; the SDK simulator is unchanged.
+
+## Decided by the implementer (flag if you disagree)
+
+- **The last list survives a reboot.** The device persists the list along with the outbox, so a
+  power blip doesn't drop back to "waiting for today's list" (in keeping with "the device never
+  clears the list on its own"). Items in their undo window at power loss come back open.
+- **Look:** cozy dark berry theme (plum background, pink checkboxes and accents to match the
+  stand, cream text, mint for HealthKit/auto). The pixel Muse avatar is drawn on black, so a
+  dark theme lets it sit on the screen without a box around it.
+- **Celebration** plays when the last open item's undo window ends (not at the tap), so undo
+  never has to take back a celebration. Removing items without completing them doesn't celebrate.
+- **Give-up after 24 h of failed sends** is measured on the wall clock from the first failure,
+  so time offline (no send attempts) never counts toward it.
+- **Fonts:** Montserrat 16–48 (LVGL built-ins). The firmware overlay must enable
+  `CONFIG_LV_FONT_MONTSERRAT_{24,32,40,48}` in addition to the SDK's sizes. These fonts only
+  cover ASCII, so accented letters and emoji in labels won't render yet.
 
 # Build, flash, and iterate
 
@@ -32,8 +53,9 @@
 - The SDK's `esp32/AGENTS.md` is the authoritative build/flash reference — read it before
   touching the build system. Each build keeps its `sdkconfig` in its build directory; delete it
   after changing overlays.
-- UI iteration: `esp32/simulator/` runs the production UI on desktop, but in a fixed 412x412
-  window (see open question 6). Its headless scenario mode is useful for testing behavior.
+- UI iteration: `tools/sim.sh run` opens this repo's 800x480 simulator; `tools/sim.sh test`
+  runs the model and scenario tests; `tools/sim.sh previews` re-renders `docs/previews/`.
+  Details in `sim/README.md`.
 - Hardware iteration: once the board arrives, flash the board-support port first (acceptance
   criteria in `02-board-support-port.md`), then the todo UI.
 - Before handing back work: board build passes with the size check, SDK host tests pass, and a
