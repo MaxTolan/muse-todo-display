@@ -1,0 +1,58 @@
+# A day on the desk, one screenshot per state in docs/03-ui-spec.md.
+# Run: build/sim/todo_sim --headless --scenario sim/scenarios/tour.txt --out previews
+clock=2026-10-07 06:58
+advance=600
+screenshot=01-idle.png
+expect_screen=idle
+
+# Morning push.
+clock=2026-10-07 07:02
+list_date=Wednesday, October 7
+set_list_file=day.json
+message=Good morning! Nine things today. You've got this.
+advance=1200
+screenshot=02-list-message.png
+expect_screen=list
+
+# Tap Rosary: squishy check, undo window.
+tap=row:rosary@2026-10-07
+advance=1500
+screenshot=03-undo-window.png
+expect_state=rosary@2026-10-07 undo
+
+# Wi-Fi drops; the undo window ends and the completion waits.
+online=false
+advance=3700
+screenshot=04-crossed-out-waiting.png
+expect_state=rosary@2026-10-07 queued
+expect_turns=0
+
+# Back online: it sends, Muse replies, the row hops away.
+auto_reply=Rosary logged. Lovely start to the day!
+online=true
+advance=300
+expect_state=rosary@2026-10-07 sending
+screenshot=05-crossed-out-sending.png
+expect_turn=[todo-display] Completed: Rosary (id rosary@2026-10-07) at 7:02 AM.
+advance=1300
+expect_message=Rosary logged. Lovely start to the day!
+expect_state=rosary@2026-10-07 leaving
+screenshot=06-reply-hop-away.png
+advance=800
+expect_state=rosary@2026-10-07 hidden
+screenshot=07-reply-in-bar.png
+
+# HealthKit: Muse marks steps done.
+clock=2026-10-07 12:30
+set_list_file=day-noon.json
+advance=800
+screenshot=08-healthkit-done.png
+expect_state=steps@2026-10-07 auto_done
+advance=3000
+expect_state=steps@2026-10-07 hidden
+expect_turns=1
+
+# A new message from Muse replaces the reply in the bar.
+message=Don't forget the UPS store closes at 7.
+advance=600
+screenshot=09-new-message.png

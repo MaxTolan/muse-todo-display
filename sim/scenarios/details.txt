@@ -1,0 +1,19 @@
+# Long labels, the sending note, Muse peeking, and tapping the message away.
+clock=2026-10-07 15:05
+list_date=Wednesday, October 7
+set_list=[{"id":"ups@2026-10-07","label":"Return the library book and drop the shoe box off at the UPS store before it closes tonight, and pick up stamps","source":"manual"},{"id":"protein@2026-10-07","label":"180 g protein","source":"myfitnesspal"},{"id":"pt@2026-10-07","label":"PT exercises","source":"manual"},{"id":"cal@2026-10-07","label":"Call Mom back","source":"calendar"}]
+refuse_turns=true
+advance=300
+tap=row:pt@2026-10-07
+advance=5100
+expect_state=pt@2026-10-07 queued
+peek=1
+advance=700
+screenshot=13-long-label-sending-peek.png
+message=Reminder: PT is better before dinner. Also, the UPS store on Main closes at 7 tonight, so leave by 6:30 if you want to make it with the box and the book.
+advance=400
+screenshot=14-long-message.png
+tap=message
+advance=300
+expect_message=
+screenshot=15-message-cleared.png

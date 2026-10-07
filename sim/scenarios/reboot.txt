@@ -1,0 +1,28 @@
+# Power loss while a completion waits offline: after the reboot the list and the
+# crossed-out item are still there, and it sends once the connection is back.
+clock=2026-10-07 10:20
+list_date=Wednesday, October 7
+set_list=[{"id":"sun@2026-10-07","label":"Sunlight","source":"manual"},{"id":"pt@2026-10-07","label":"PT exercises","source":"manual"}]
+online=false
+advance=200
+tap=row:sun@2026-10-07
+advance=5200
+expect_state=sun@2026-10-07 queued
+tap=row:pt@2026-10-07
+advance=1000
+expect_state=pt@2026-10-07 undo
+reboot=1
+advance=500
+expect_screen=list
+expect_state=sun@2026-10-07 queued
+expect_state=pt@2026-10-07 open
+screenshot=16-after-reboot-waiting.png
+expect_turns=0
+auto_reply=Sunlight logged.
+online=true
+advance=200
+expect_turns=1
+expect_turn=[todo-display] Completed: Sunlight (id sun@2026-10-07) at 10:20 AM.
+advance=2500
+expect_state=sun@2026-10-07 hidden
+expect_message=Sunlight logged.
