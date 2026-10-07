@@ -435,18 +435,59 @@ static void test_message_bar(void)
 {
     setup("message_bar");
     char err[32];
+    /* Durations are written out (not the constants) to pin the owner's choice:
+     * under 50 characters -> 30 s, otherwise 5 minutes. */
     CHECK(todo_model_show_message(&M, "Drink some water!", T, err, sizeof(err)));
     CHECK_STR(M.message, "Drink some water!");
-    run(TODO_MESSAGE_MS - 1000);
+    run(29900);
     CHECK(M.message[0]);
-    run(1100);
+    run(200);
     CHECK(!M.message[0]);
 
-    todo_model_show_message(&M, "one", T, err, sizeof(err));
+    static const char LONG_MSG[] = "Halfway there! Maybe step outside for some sunlight?"; /* 52 chars */
+    todo_model_show_message(&M, LONG_MSG, T, err, sizeof(err));
+    run(5 * 60 * 1000 - 100);
+    CHECK_STR(M.message, LONG_MSG);
+    run(200);
+    CHECK(!M.message[0]);
+
+    /* The boundary: 49 characters is short, 50 is long. */
+    char text[64];
+    memset(text, 'a', 49);
+    text[49] = '\0';
+    CHECK(todo_message_hold_ms(text) == 30000);
+    text[49] = 'a';
+    text[50] = '\0';
+    CHECK(todo_message_hold_ms(text) == 300000);
+    /* Characters, not bytes: 40 x "é" is 80 bytes but still short. */
+    char accents[96] = "";
+    for (int i = 0; i < 40; i++) {
+        strcat(accents, "\xc3\xa9");
+    }
+    CHECK(todo_message_hold_ms(accents) == 30000);
+
+    /* Replacing restarts the timer with the new message's length. */
+    todo_model_show_message(&M, LONG_MSG, T, err, sizeof(err));
     run(60000);
-    todo_model_show_message(&M, "two", T, err, sizeof(err)); /* replacing restarts the timer */
-    run(TODO_MESSAGE_MS - 1000);
+    todo_model_show_message(&M, "two", T, err, sizeof(err));
+    run(29900);
     CHECK_STR(M.message, "two");
+    run(200);
+    CHECK(!M.message[0]);
+
+    /* Muse's replies follow the same rule. */
+    push(DAY);
+    todo_model_tap(&M, "rosary@1007", T);
+    run(TODO_UNDO_MS + 100);
+    todo_model_turn_reply(&M, "Logged!");
+    todo_model_turn_done(&M, T);
+    run(29900);
+    CHECK_STR(M.message, "Logged!");
+    run(200);
+    CHECK(!M.message[0]);
+
+    /* Tapping clears it right away. */
+    todo_model_show_message(&M, LONG_MSG, T, err, sizeof(err));
     todo_model_clear_message(&M);
     CHECK(!M.message[0]);
 }

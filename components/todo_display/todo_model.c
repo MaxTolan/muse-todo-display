@@ -95,11 +95,21 @@ static void start_celebration(todo_model_t *m, uint32_t now)
     m->celebrate_ms = now;
 }
 
+uint32_t todo_message_hold_ms(const char *text)
+{
+    size_t chars = 0;
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        chars += (*p & 0xc0) != 0x80; /* count UTF-8 lead bytes only */
+    }
+    return chars < TODO_MESSAGE_SHORT_CHARS ? TODO_MESSAGE_SHORT_MS : TODO_MESSAGE_LONG_MS;
+}
+
 static void set_message(todo_model_t *m, const char *text, uint32_t now)
 {
     copy_str(m->message, sizeof(m->message), text);
     flatten(m->message);
     m->message_ms = now;
+    m->message_hold_ms = todo_message_hold_ms(m->message);
     m->message_seq++;
     m->seq++;
 }
@@ -693,7 +703,7 @@ void todo_model_tick(todo_model_t *m, uint32_t now_ms)
         m->celebrating = false;
         m->seq++;
     }
-    if (m->message[0] && elapsed(now_ms, m->message_ms, TODO_MESSAGE_MS)) {
+    if (m->message[0] && elapsed(now_ms, m->message_ms, m->message_hold_ms)) {
         todo_model_clear_message(m);
     }
     if (m->in_flight && elapsed(now_ms, m->in_flight_ms, TODO_TURN_TIMEOUT_MS)) {

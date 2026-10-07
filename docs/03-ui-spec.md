@@ -32,8 +32,9 @@ all done, idle) before calling UI work done.
   or "HealthKit").
 - **Message bar** (bottom): shows Muse's replies and messages Muse sends to the screen.
   One message at a time, plain text, wraps to at most two lines (truncate with "…" beyond that).
-  It stays until replaced by a newer message or until it's been up for a few minutes
-  (default 5 min), then clears. Tapping it clears it.
+  It stays until replaced by a newer message or until its time is up, then clears:
+  **30 seconds** for a message under 50 characters, **5 minutes** otherwise (owner's choice,
+  Oct 7). Tapping it clears it sooner.
 - The completion celebration plays over the main area (see below).
 
 ## Item lifecycle

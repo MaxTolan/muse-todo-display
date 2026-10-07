@@ -34,7 +34,10 @@ extern "C" {
 #define TODO_AUTO_DONE_SHOW_MS 3000u
 #define TODO_LEAVE_MS 450u
 #define TODO_CELEBRATE_MS 2000u
-#define TODO_MESSAGE_MS (5u * 60u * 1000u)
+/* Message bar: short messages clear sooner than long ones (owner's choice). */
+#define TODO_MESSAGE_SHORT_CHARS 50
+#define TODO_MESSAGE_SHORT_MS 30000u
+#define TODO_MESSAGE_LONG_MS (5u * 60u * 1000u)
 #define TODO_TURN_TIMEOUT_MS 60000u
 #define TODO_REFUSED_RETRY_MS 2000u
 #define TODO_GIVE_UP_S (24 * 60 * 60)
@@ -98,6 +101,7 @@ typedef struct {
     /* Message bar. */
     char message[TODO_MESSAGE_MAX + 1];
     uint32_t message_ms;
+    uint32_t message_hold_ms; /* how long this message stays up */
     uint32_t message_seq; /* bumps whenever the message changes */
 
     /* Outbox sending. */
@@ -164,6 +168,12 @@ int todo_model_outbox_count(const todo_model_t *m);
  * most len bytes; returns false if it didn't fit.
  */
 bool todo_model_list_result(const todo_model_t *m, char *out, size_t len);
+
+/*
+ * How long a message stays in the bar: 30 s if it is under 50 characters,
+ * otherwise 5 minutes. Characters, not bytes, so accented text counts fairly.
+ */
+uint32_t todo_message_hold_ms(const char *text);
 
 /* Friendly name for a source tag ("healthkit" -> "HealthKit"). */
 const char *todo_source_label(const char *source);
