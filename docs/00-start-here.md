@@ -26,8 +26,8 @@ exists. Muse can also send short messages to the screen.
 4. **Agent integration** — `todo.set_list` / `todo.show_message` commands (Muse → device) and
    the completion outbox that sends typed chat turns (device → Muse), with offline hold-and-retry.
    (`04-agent-integration.md`)
-5. **Task entry (issue #2)** — scope not yet defined. Do not build until the owner specifies
-   it (see `05-open-questions-and-build.md`). Until then the "no on-device keyboard" rule stands.
+5. **Task entry (issue #2)** — specified Oct 9 and built in the UI/model: a + button opens an
+   on-screen keyboard; the device asks Muse to add the task (`03-ui-spec.md`, "Adding a task").
 
 HealthKit/MyFitnessPal auto-completion is agent-side: the device just renders the state Muse
 pushes. New item sources need no firmware change (see the `source` field in `04`).

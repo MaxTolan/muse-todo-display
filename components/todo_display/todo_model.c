@@ -206,6 +206,16 @@ static void save(todo_model_t *m)
         cJSON_AddItemToArray(items, o);
     }
     cJSON_AddItemToObject(root, "items", items);
+    cJSON_AddNumberToObject(root, "add_seq", m->add_seq);
+    cJSON *adds = cJSON_AddArrayToObject(root, "adds");
+    for (size_t i = 0; adds && i < m->add_count; i++) {
+        cJSON *o = cJSON_CreateObject();
+        if (o) {
+            cJSON_AddStringToObject(o, "id", m->adds[i].id);
+            cJSON_AddStringToObject(o, "text", m->adds[i].text);
+            cJSON_AddItemToArray(adds, o);
+        }
+    }
     char *blob = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     if (blob) {
@@ -272,6 +282,19 @@ bool todo_model_restore(todo_model_t *m, const char *blob, uint32_t now_ms)
         } else {
             set_state(it, TODO_ROW_OPEN, now_ms);
         }
+    }
+    m->add_seq = (uint32_t)get_num(root, "add_seq");
+    const cJSON *adds = cJSON_GetObjectItemCaseSensitive(root, "adds");
+    cJSON_ArrayForEach(o, adds) {
+        const char *id = get_str(o, "id");
+        const char *text = get_str(o, "text");
+        if (!id || !text || m->add_count >= TODO_MAX_ADDS) {
+            continue;
+        }
+        todo_add_t *a = &m->adds[m->add_count++];
+        memset(a, 0, sizeof(*a));
+        copy_str(a->id, sizeof(a->id), id);
+        copy_str(a->text, sizeof(a->text), text);
     }
     cJSON_Delete(root);
     m->seq++;
@@ -495,6 +518,53 @@ bool todo_model_show_message(todo_model_t *m, const char *text, uint32_t now_ms,
     return true;
 }
 
+bool todo_model_add_task(todo_model_t *m, const char *text, uint32_t now_ms, char *err, size_t err_len)
+{
+    char clean[TODO_LABEL_MAX + 1];
+    if (!text) {
+        text = "";
+    }
+    if (strlen(text) > TODO_LABEL_MAX) {
+        set_err(err, err_len, "%s", "too long (max 120)");
+        return false;
+    }
+    copy_str(clean, sizeof(clean), text);
+    flatten(clean);
+    /* Trim spaces at both ends. */
+    char *start = clean;
+    while (*start == ' ') {
+        start++;
+    }
+    size_t n = strlen(start);
+    while (n && start[n - 1] == ' ') {
+        start[--n] = '\0';
+    }
+    if (!n) {
+        set_err(err, err_len, "%s", "type a task first");
+        return false;
+    }
+    if (m->add_count >= TODO_MAX_ADDS) {
+        set_err(err, err_len, "%s", "too many tasks waiting for Muse");
+        return false;
+    }
+    todo_add_t *a = &m->adds[m->add_count++];
+    memset(a, 0, sizeof(*a));
+    m->add_seq++;
+    time_t wall = wall_now(m);
+    if (wall) {
+        snprintf(a->id, sizeof(a->id), "add-%lld-%u", (long long)wall, (unsigned)m->add_seq);
+    } else {
+        snprintf(a->id, sizeof(a->id), "add-%u", (unsigned)m->add_seq);
+    }
+    copy_str(a->text, sizeof(a->text), start);
+
+    char note[TODO_LABEL_MAX + 40];
+    snprintf(note, sizeof(note), "Asking Muse to add \"%s\"", a->text);
+    set_message(m, note, now_ms);
+    save(m);
+    return true;
+}
+
 /* ---- touch -------------------------------------------------------------- */
 
 bool todo_model_tap(todo_model_t *m, const char *id, uint32_t now_ms)
@@ -553,6 +623,9 @@ static void format_clock(time_t t, char *out, size_t len)
 static char *build_turn(const todo_model_t *m)
 {
     size_t cap = 1;
+    for (size_t i = 0; i < m->add_count; i++) {
+        cap += 64 + strlen(m->adds[i].text) + strlen(m->adds[i].id);
+    }
     for (size_t i = 0; i < m->count; i++) {
         if (m->items[i].state == TODO_ROW_QUEUED) {
             cap += 128 + strlen(m->items[i].label) + strlen(m->items[i].id) + strlen(m->items[i].source);
@@ -580,6 +653,11 @@ static char *build_turn(const todo_model_t *m)
         used += (size_t)snprintf(text + used, cap - used, "%s[todo-display] Completed: %s (id %s)%s%s.",
                                  used ? "\n" : "", it->label, it->id, when, by_hand);
     }
+    for (size_t i = 0; i < m->add_count; i++) {
+        const todo_add_t *a = &m->adds[i];
+        used += (size_t)snprintf(text + used, cap - used, "%s[todo-display] Add task: %s (request %s).",
+                                 used ? "\n" : "", a->text, a->id);
+    }
     return text;
 }
 
@@ -591,9 +669,22 @@ static void give_up(todo_model_t *m, uint32_t now)
             set_state(it, TODO_ROW_LEAVING, now);
         }
     }
+    m->add_count = 0;
     m->retry_stage = 0;
     m->first_fail_at = 0;
     set_message(m, COULDNT_REACH, now);
+}
+
+/* Drop the task requests Muse has now received. */
+static void drop_sent_adds(todo_model_t *m)
+{
+    size_t kept = 0;
+    for (size_t i = 0; i < m->add_count; i++) {
+        if (!m->adds[i].sending) {
+            m->adds[kept++] = m->adds[i];
+        }
+    }
+    m->add_count = kept;
 }
 
 void todo_model_turn_reply(todo_model_t *m, const char *chunk)
@@ -618,6 +709,7 @@ void todo_model_turn_done(todo_model_t *m, uint32_t now_ms)
             set_state(it, TODO_ROW_LEAVING, now_ms);
         }
     }
+    drop_sent_adds(m);
     if (m->reply[0]) {
         set_message(m, m->reply, now_ms);
     }
@@ -640,6 +732,9 @@ void todo_model_turn_error(todo_model_t *m, uint32_t now_ms)
         if (m->items[i].state == TODO_ROW_SENDING) {
             set_state(&m->items[i], TODO_ROW_QUEUED, now_ms);
         }
+    }
+    for (size_t i = 0; i < m->add_count; i++) {
+        m->adds[i].sending = false;
     }
     time_t wall = wall_now(m);
     if (!m->first_fail_at) {
@@ -664,7 +759,7 @@ static void try_send(todo_model_t *m, uint32_t now)
         || (int32_t)(now - m->next_send_ms) < 0) {
         return;
     }
-    bool any = false;
+    bool any = m->add_count > 0;
     for (size_t i = 0; i < m->count && !any; i++) {
         any = m->items[i].state == TODO_ROW_QUEUED;
     }
@@ -689,6 +784,9 @@ static void try_send(todo_model_t *m, uint32_t now)
         if (m->items[i].state == TODO_ROW_QUEUED) {
             set_state(&m->items[i], TODO_ROW_SENDING, now);
         }
+    }
+    for (size_t i = 0; i < m->add_count; i++) {
+        m->adds[i].sending = true; /* everything queued went out in this turn */
     }
     m->seq++;
 }

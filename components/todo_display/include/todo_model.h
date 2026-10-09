@@ -32,6 +32,8 @@ extern "C" {
 #define TODO_SOURCE_MAX 32
 #define TODO_DATE_MAX 40
 #define TODO_MESSAGE_MAX 280
+#define TODO_MAX_ADDS 8 /* task requests waiting for Muse (issue #2) */
+#define TODO_ADD_ID_MAX 40
 
 /* Timing (docs/03-ui-spec.md, docs/04-agent-integration.md). */
 #define TODO_UNDO_MS 5000u
@@ -72,6 +74,16 @@ typedef struct {
     time_t completed_at; /* wall clock at the tap, 0 if unknown */
 } todo_item_t;
 
+/*
+ * A task the owner typed on the device, waiting to be sent to Muse. Muse owns
+ * the list, so the device asks Muse to add it and Muse pushes the new list.
+ */
+typedef struct {
+    char id[TODO_ADD_ID_MAX + 1]; /* request ID so Muse can ignore repeats */
+    char text[TODO_LABEL_MAX + 1];
+    bool sending;                 /* part of the chat turn in flight */
+} todo_add_t;
+
 /* What the screen should show as a whole. */
 typedef enum {
     TODO_SCREEN_IDLE,      /* no list yet: "waiting for today's list" */
@@ -110,6 +122,11 @@ typedef struct {
     uint32_t message_ms;
     uint32_t message_hold_ms; /* how long this message stays up */
     uint32_t message_seq; /* bumps whenever the message changes */
+
+    /* Task requests waiting for Muse; they share the outbox with completions. */
+    todo_add_t adds[TODO_MAX_ADDS];
+    size_t add_count;
+    uint32_t add_seq; /* numbers the request IDs; persisted */
 
     /* Outbox sending. */
     bool online;
@@ -152,6 +169,13 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
 /* todo.show_message. Returns false (with err) if the text is missing or too long. */
 bool todo_model_show_message(todo_model_t *m, const char *text, uint32_t now_ms,
                              char *err, size_t err_len);
+
+/*
+ * Ask Muse to add a task (typed on the on-screen keyboard). Queued in the
+ * persisted outbox and sent like completions. Returns false with err if the
+ * text is empty or too long, or too many requests are already waiting.
+ */
+bool todo_model_add_task(todo_model_t *m, const char *text, uint32_t now_ms, char *err, size_t err_len);
 
 /* Touch input. Return true if the tap did something. */
 bool todo_model_tap(todo_model_t *m, const char *id, uint32_t now_ms);

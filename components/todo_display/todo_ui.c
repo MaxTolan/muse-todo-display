@@ -39,6 +39,8 @@
 #define MASCOT_FRAME_MS 80u
 #define BAR_SLIDE_MS 260u
 #define CONFETTI_N 28
+#define SHEET_IDLE_MS 60000u /* close the add-task sheet if left alone */
+#define ADD_BTN_W 60
 #define DANCER_PX 128
 #define DANCER_RISE_MS 220.0f
 #define DANCER_DROP_MS 260.0f
@@ -107,6 +109,17 @@ static struct {
     lv_obj_t *confetti[CONFETTI_N];
 
     lv_obj_t *dancer;
+
+    /* Add a task (issue #2): hidden until the + button is tapped. */
+    lv_obj_t *add_btn;
+    lv_obj_t *sheet;
+    lv_obj_t *sheet_ta;
+    lv_obj_t *sheet_kb;
+    lv_obj_t *sheet_err;
+    lv_obj_t *sheet_add;
+    lv_obj_t *sheet_cancel;
+    bool sheet_open;
+    uint32_t sheet_ms; /* last activity */
 
     lv_obj_t *bar;
     lv_obj_t *bar_muse;
@@ -600,7 +613,7 @@ static void build_top(void)
 
     s.pill = box(s.top);
     lv_obj_set_size(s.pill, 200, 48);
-    lv_obj_align(s.pill, LV_ALIGN_RIGHT_MID, 0, 2);
+    lv_obj_align(s.pill, LV_ALIGN_RIGHT_MID, -(ADD_BTN_W + 12), 2);
     lv_obj_set_style_radius(s.pill, 24, 0);
     lv_obj_set_style_bg_opa(s.pill, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(s.pill, col(C_CARD), 0);
@@ -615,7 +628,7 @@ static void build_top(void)
     /* Muse peeks up from behind the bottom edge of this little window. */
     s.peek_box = box(s.top);
     lv_obj_set_size(s.peek_box, 112, TOP_H);
-    lv_obj_align(s.peek_box, LV_ALIGN_RIGHT_MID, -208, 0);
+    lv_obj_align(s.peek_box, LV_ALIGN_RIGHT_MID, -(208 + ADD_BTN_W + 12), 0);
     s.peek_muse = todo_mascot_create(s.peek_box, 128);
     lv_obj_set_pos(s.peek_muse, -8, TOP_H);
 }
@@ -744,6 +757,191 @@ static void build_bar(void)
     show(s.bar, false);
 }
 
+/* ---- add a task --------------------------------------------------------- */
+
+static void sheet_close(bool keep_draft)
+{
+    if (!keep_draft) {
+        lv_textarea_set_text(s.sheet_ta, "");
+    }
+    set_text(s.sheet_err, "");
+    s.sheet_open = false;
+    show(s.sheet, false);
+}
+
+static void sheet_submit(void)
+{
+    char err[64] = "";
+    if (todo_model_add_task(s.model, lv_textarea_get_text(s.sheet_ta), s.now, err, sizeof(err))) {
+        sheet_close(false);
+    } else {
+        set_text(s.sheet_err, err);
+        s.sheet_ms = s.now;
+    }
+}
+
+static void add_btn_clicked(lv_event_t *e)
+{
+    (void)e;
+    s.sheet_open = true;
+    s.sheet_ms = s.now;
+    set_text(s.sheet_err, "");
+    lv_keyboard_set_mode(s.sheet_kb, LV_KEYBOARD_MODE_TEXT_LOWER);
+    show(s.sheet, true);
+}
+
+static void sheet_add_clicked(lv_event_t *e)
+{
+    (void)e;
+    sheet_submit();
+}
+
+static void sheet_cancel_clicked(lv_event_t *e)
+{
+    (void)e;
+    sheet_close(false);
+}
+
+/* The keyboard's close key. */
+static void sheet_kb_cancel(lv_event_t *e)
+{
+    (void)e;
+    sheet_close(false);
+}
+
+/*
+ * The text box reports "ready" for both the keyboard's check key and Enter.
+ * (The check key also tells the keyboard itself; listening there as well
+ * would submit twice.)
+ */
+static void sheet_ta_ready(lv_event_t *e)
+{
+    (void)e;
+    sheet_submit();
+}
+
+static void sheet_typed(lv_event_t *e)
+{
+    (void)e;
+    s.sheet_ms = s.now;
+    set_text(s.sheet_err, "");
+}
+
+static lv_obj_t *pill_button(lv_obj_t *parent, const char *label, uint32_t bg, uint32_t fg, int32_t w)
+{
+    lv_obj_t *b = box(parent);
+    lv_obj_set_size(b, w, 56);
+    lv_obj_set_style_radius(b, 28, 0);
+    lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(b, col(bg), 0);
+    lv_obj_set_style_bg_color(b, col(C_CREAM), LV_STATE_PRESSED);
+    lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *l = text(b, &lv_font_montserrat_24, fg);
+    lv_label_set_text(l, label);
+    lv_obj_center(l);
+    return b;
+}
+
+static void build_add(lv_obj_t *parent)
+{
+    /* The + lives at the top right on every screen; it opens the sheet. */
+    s.add_btn = box(parent);
+    lv_obj_set_size(s.add_btn, ADD_BTN_W, 48);
+    lv_obj_set_pos(s.add_btn, SCREEN_W - 28 - ADD_BTN_W, (TOP_H - 48) / 2 + 2);
+    lv_obj_set_style_radius(s.add_btn, 24, 0);
+    lv_obj_set_style_bg_opa(s.add_btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s.add_btn, col(C_PINK), 0);
+    lv_obj_set_style_bg_color(s.add_btn, col(C_CREAM), LV_STATE_PRESSED);
+    lv_obj_set_ext_click_area(s.add_btn, 12); /* easy to hit from across the desk */
+    lv_obj_add_flag(s.add_btn, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s.add_btn, add_btn_clicked, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *plus = text(s.add_btn, &lv_font_montserrat_28, C_PLUM_TEXT);
+    lv_label_set_text(plus, LV_SYMBOL_PLUS);
+    lv_obj_center(plus);
+
+    /* Full-screen sheet: title, Cancel/Add, the text box and a keyboard. */
+    s.sheet = box(parent);
+    lv_obj_set_size(s.sheet, SCREEN_W, SCREEN_H);
+    lv_obj_set_style_bg_opa(s.sheet, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s.sheet, col(C_BG), 0);
+    lv_obj_add_flag(s.sheet, LV_OBJ_FLAG_CLICKABLE); /* swallow taps meant for the list underneath */
+
+    lv_obj_t *title = text(s.sheet, &lv_font_montserrat_28, C_CREAM);
+    lv_label_set_text(title, "Add a task");
+    lv_obj_set_pos(title, 28, 26);
+
+    s.sheet_cancel = pill_button(s.sheet, "Cancel", C_CARD, C_CREAM, 140);
+    lv_obj_set_pos(s.sheet_cancel, SCREEN_W - 28 - 140 - 12 - 140, 14);
+    lv_obj_add_event_cb(s.sheet_cancel, sheet_cancel_clicked, LV_EVENT_CLICKED, NULL);
+    s.sheet_add = pill_button(s.sheet, "Add", C_PINK, C_PLUM_TEXT, 140);
+    lv_obj_set_pos(s.sheet_add, SCREEN_W - 28 - 140, 14);
+    lv_obj_add_event_cb(s.sheet_add, sheet_add_clicked, LV_EVENT_CLICKED, NULL);
+
+    s.sheet_ta = lv_textarea_create(s.sheet);
+    lv_obj_set_size(s.sheet_ta, SCREEN_W - 48, 72);
+    lv_obj_set_pos(s.sheet_ta, 24, 86);
+    lv_textarea_set_one_line(s.sheet_ta, true);
+    lv_textarea_set_max_length(s.sheet_ta, TODO_LABEL_MAX);
+    lv_textarea_set_placeholder_text(s.sheet_ta, "What should Muse add?");
+    lv_obj_set_style_text_font(s.sheet_ta, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(s.sheet_ta, col(C_CREAM), 0);
+    lv_obj_set_style_text_color(s.sheet_ta, col(C_FAINT), LV_PART_TEXTAREA_PLACEHOLDER);
+    lv_obj_set_style_bg_color(s.sheet_ta, col(C_CARD), 0);
+    lv_obj_set_style_bg_opa(s.sheet_ta, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(s.sheet_ta, col(C_PINK), 0);
+    lv_obj_set_style_border_width(s.sheet_ta, 3, 0);
+    lv_obj_set_style_radius(s.sheet_ta, 22, 0);
+    lv_obj_set_style_pad_hor(s.sheet_ta, 20, 0);
+    lv_obj_set_style_pad_ver(s.sheet_ta, 16, 0);
+    lv_obj_set_style_border_color(s.sheet_ta, col(C_PINK), LV_PART_CURSOR);
+    lv_obj_set_style_bg_opa(s.sheet_ta, LV_OPA_TRANSP, LV_PART_CURSOR);
+    lv_obj_add_state(s.sheet_ta, LV_STATE_FOCUSED); /* show the cursor */
+    lv_obj_add_event_cb(s.sheet_ta, sheet_typed, LV_EVENT_VALUE_CHANGED, NULL);
+
+    s.sheet_err = text(s.sheet, &lv_font_montserrat_20, C_PEACH);
+    lv_obj_set_pos(s.sheet_err, 32, 166);
+
+    s.sheet_kb = lv_keyboard_create(s.sheet);
+    lv_obj_set_size(s.sheet_kb, SCREEN_W, 284);
+    lv_obj_align(s.sheet_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_keyboard_set_textarea(s.sheet_kb, s.sheet_ta);
+    lv_obj_set_style_bg_color(s.sheet_kb, col(C_BG), 0);
+    lv_obj_set_style_bg_opa(s.sheet_kb, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s.sheet_kb, 0, 0);
+    lv_obj_set_style_pad_all(s.sheet_kb, 10, 0);
+    lv_obj_set_style_pad_gap(s.sheet_kb, 8, 0);
+    lv_obj_set_style_bg_color(s.sheet_kb, col(C_CARD), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(s.sheet_kb, col(C_CARD_PRESSED), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(s.sheet_kb, col(C_PINK), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(s.sheet_kb, col(C_CREAM), LV_PART_ITEMS);
+    lv_obj_set_style_text_font(s.sheet_kb, &lv_font_montserrat_24, LV_PART_ITEMS);
+    lv_obj_set_style_radius(s.sheet_kb, 14, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(s.sheet_kb, 0, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(s.sheet_kb, 0, LV_PART_ITEMS);
+    lv_obj_add_event_cb(s.sheet_kb, sheet_kb_cancel, LV_EVENT_CANCEL, NULL);
+    lv_obj_add_event_cb(s.sheet_ta, sheet_ta_ready, LV_EVENT_READY, NULL);
+    show(s.sheet, false);
+}
+
+bool todo_ui_type(const char *key)
+{
+    if (!s.sheet_open) {
+        return false;
+    }
+    /* Press a keyboard key by its label, through the keyboard's own handler. */
+    for (uint32_t i = 0;; i++) {
+        const char *label = lv_buttonmatrix_get_button_text(s.sheet_kb, i);
+        if (!label) {
+            return false;
+        }
+        if (!strcmp(label, key)) {
+            lv_buttonmatrix_set_selected_button(s.sheet_kb, i);
+            lv_obj_send_event(s.sheet_kb, LV_EVENT_VALUE_CHANGED, NULL);
+            return true;
+        }
+    }
+}
+
 void todo_ui_create(lv_obj_t *parent, todo_model_t *model)
 {
     memset(&s, 0, sizeof(s));
@@ -780,6 +978,7 @@ void todo_ui_create(lv_obj_t *parent, todo_model_t *model)
     build_dancer();
     build_bar();
     build_idle(parent);
+    build_add(parent);
 }
 
 /* ---- per frame ----------------------------------------------------------- */
@@ -971,6 +1170,10 @@ void todo_ui_update(uint32_t now_ms)
     show(s.list, screen == TODO_SCREEN_LIST);
     show(s.done, screen == TODO_SCREEN_ALL_DONE);
     show(s.party, screen == TODO_SCREEN_CELEBRATE);
+    if (s.sheet_open && since(s.sheet_ms) >= SHEET_IDLE_MS) {
+        sheet_close(true); /* walked away: hide it, keep what was typed */
+    }
+    show(s.add_btn, !s.sheet_open && screen != TODO_SCREEN_CELEBRATE);
 
     switch (screen) {
     case TODO_SCREEN_IDLE: {
@@ -1014,6 +1217,12 @@ bool todo_ui_point_for(const char *target, lv_point_t *pt)
     } else if (!strncmp(target, "undo:", 5)) {
         row_t *r = row_find(target + 5);
         o = r ? r->undo : NULL;
+    } else if (!strcmp(target, "add")) {
+        o = s.add_btn;
+    } else if (!strcmp(target, "sheet_add")) {
+        o = s.sheet_open ? s.sheet_add : NULL;
+    } else if (!strcmp(target, "sheet_cancel")) {
+        o = s.sheet_open ? s.sheet_cancel : NULL;
     } else if (!strcmp(target, "message")) {
         o = s.bar;
     }

@@ -29,9 +29,17 @@ void todo_ui_peek(uint32_t now_ms);
 
 /*
  * Screen point to touch for a target, for scripted input in the simulator:
- * "row:<id>", "undo:<id>" or "message". Returns false if it isn't on screen.
+ * "row:<id>", "undo:<id>", "message", "add" (the + button), or while the
+ * add-task sheet is open "sheet_add" / "sheet_cancel". Returns false if it
+ * isn't on screen.
  */
 bool todo_ui_point_for(const char *target, lv_point_t *pt);
+
+/*
+ * Press an on-screen keyboard key by its label ("a", " ", LV_SYMBOL_BACKSPACE,
+ * LV_SYMBOL_OK ...) while the add-task sheet is open. For scripted input.
+ */
+bool todo_ui_type(const char *key);
 
 #ifdef __cplusplus
 }

@@ -94,6 +94,20 @@ marks them.
   comes back; completing those plays the celebration again.
 - A push that arrives with everything already done shows "all done" without the animation.
 
+## Adding a task (issue #2)
+
+- A pink **+** button sits at the top right on every screen (hidden during the celebration).
+  Tapping it opens a full-screen "Add a task" sheet: a one-line text box (max 120 characters)
+  and LVGL's on-screen keyboard, styled to the theme. The keyboard is hidden otherwise
+  (owner's choice, Oct 9).
+- **Add**, the keyboard's check key, or Enter sends it. An empty box shows "type a task first".
+- **Cancel** or the keyboard's close key closes the sheet and clears the text. Left alone for
+  60 s, the sheet closes on its own but keeps the draft for next time.
+- Muse owns the list, so the device doesn't add a row itself. It shows "Asking Muse to add
+  "…"" in the message bar, sends an "Add task" line to Muse through the outbox (persisted, held
+  while offline, retried like completions, up to 8 waiting), shows Muse's reply, and the task
+  appears when Muse pushes the updated list.
+
 ## Idle / no list
 
 If no list has arrived yet (or Muse is unreachable and there's no list), show a calm idle
@@ -124,7 +138,7 @@ Long item names must wrap or truncate gracefully — never overflow the row.
 ## What NOT to build
 
 - No settings screens beyond what's needed for Wi-Fi/pairing (SDK-provided).
-- No on-device text entry or keyboards, unless issue #2 (task entry) is specified otherwise.
+- No on-device text entry beyond the add-task sheet (issue #2).
 - No phone-mount, MagSafe, or ring accessories — desk stand only, permanently.
 - No battery-life claims anywhere in the UI or docs.
 - No on-device day rollover or scheduling.

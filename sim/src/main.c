@@ -254,6 +254,47 @@ static void tap(const char *target, bool real_time)
     tap_point(pt, real_time);
 }
 
+/*
+ * Type text on the on-screen keyboard, one key press at a time, switching
+ * between its letter/CAPS/symbol pages as a person would. The sheet opens on
+ * the lowercase page.
+ */
+static bool type_text(const char *text, bool real_time)
+{
+    enum { LOWER, UPPER, SPECIAL } page = LOWER;
+    for (const char *p = text; *p; p++) {
+        char key[2] = { *p, 0 };
+        int want;
+        if ((*p >= 'a' && *p <= 'z') || strchr(" _-.,:", *p)) {
+            want = page == UPPER && !(*p >= 'a' && *p <= 'z') ? UPPER : LOWER;
+        } else if (*p >= 'A' && *p <= 'Z') {
+            want = UPPER;
+        } else {
+            want = SPECIAL;
+        }
+        if (want != (int)page) {
+            if (page != LOWER) {
+                todo_ui_type("abc");
+            }
+            if (want == UPPER) {
+                todo_ui_type("ABC");
+            } else if (want == SPECIAL) {
+                todo_ui_type("1#");
+            }
+            page = want;
+        }
+        if (!todo_ui_type(key)) {
+            fprintf(stderr, "type: no key for '%c' (is the add-task sheet open?)\n", *p);
+            return false;
+        }
+        run_for(30, real_time);
+    }
+    if (page != LOWER) {
+        todo_ui_type("abc");
+    }
+    return true;
+}
+
 static void reboot(void)
 {
     printf("[%7u] reboot\n", g.now_ms);
@@ -430,6 +471,21 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
             ok = todo_model_show_message(&g.model, v, g.now_ms, err, sizeof(err));
         } else if (!strcmp(k, "tap")) {
             tap(v, real_time);
+        } else if (!strcmp(k, "type")) {
+            ok = type_text(v, real_time);
+        } else if (!strcmp(k, "key")) {
+            /* A single key by label; names for the special ones. */
+            const char *label = !strcmp(v, "backspace") ? LV_SYMBOL_BACKSPACE
+                              : !strcmp(v, "ok")        ? LV_SYMBOL_OK
+                              : !strcmp(v, "enter")     ? LV_SYMBOL_NEW_LINE
+                              : !strcmp(v, "close")     ? LV_SYMBOL_KEYBOARD
+                                                        : v;
+            ok = todo_ui_type(label);
+            run_for(30, real_time);
+        } else if (!strcmp(k, "expect_sheet")) {
+            lv_point_t pt;
+            bool open = todo_ui_point_for("sheet_add", &pt);
+            check(open == !strcmp(v, "open"), line_no, v, open ? "open" : "closed");
         } else if (!strcmp(k, "tap_at")) {
             int x, y;
             ok = sscanf(v, "%d,%d", &x, &y) == 2;

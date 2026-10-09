@@ -76,13 +76,21 @@ A HealthKit item ticked by hand (because HealthKit hadn't synced yet) says so:
 [todo-display] Completed: 10,000 steps (id steps@2026-10-05) at 6:10 PM, marked by hand before HealthKit caught up.
 ```
 
-If several completions are waiting, send them in one turn, one line each.
+A task typed on the device's keyboard (issue #2) asks Muse to add it. The request ID is unique
+per request (wall-clock seconds and a counter that survives reboots), so a resend is safe:
+
+```
+[todo-display] Add task: Call the dentist about Tuesday at 3 (request add-1791559802-1).
+```
+
+If several completions (or task requests) are waiting, send them in one turn, one line each.
 
 Muse needs a standing instruction (set up by the owner in Muse, not in firmware), roughly:
 *"Messages starting with [todo-display] are completions from my desk display. Record each
 item ID once and ignore IDs you've already recorded. If one says it was marked by hand before
 HealthKit caught up, count it as done now, and don't count it again when HealthKit syncs.
-Reply in one short sentence."*
+"Add task" lines are new todos for today: add each request ID once, then push the updated list
+to the display. Reply in one short sentence."*
 
 ### The outbox
 

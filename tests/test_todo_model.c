@@ -544,6 +544,96 @@ static void test_dance(void)
     CHECK(M.celebrating && !M.dancing);
 }
 
+static void test_add_task(void)
+{
+    char err[64];
+    setup("add_task/validation");
+    CHECK(!todo_model_add_task(&M, "", T, err, sizeof(err)));
+    CHECK(!todo_model_add_task(&M, "   ", T, err, sizeof(err)));
+    CHECK(!todo_model_add_task(&M, NULL, T, err, sizeof(err)));
+    char big[200];
+    memset(big, 'x', sizeof(big) - 1);
+    big[sizeof(big) - 1] = '\0';
+    CHECK(!todo_model_add_task(&M, big, T, err, sizeof(err)));
+    CHECK(M.add_count == 0);
+    for (int i = 0; i < TODO_MAX_ADDS; i++) {
+        F.online = false;
+        CHECK(todo_model_add_task(&M, "task", T, err, sizeof(err)));
+    }
+    CHECK(!todo_model_add_task(&M, "one too many", T, err, sizeof(err)));
+
+    setup("add_task/send");
+    CHECK(todo_model_add_task(&M, "  Call the\ndentist  ", T, err, sizeof(err)));
+    CHECK_STR(M.adds[0].text, "Call the dentist"); /* trimmed and flattened */
+    CHECK_STR(M.message, "Asking Muse to add \"Call the dentist\"");
+    CHECK(strstr(F.saved, "Call the dentist") != NULL); /* persisted at once */
+    run(40);
+    CHECK(F.sends == 1);
+    CHECK_STR(F.last_turn, "[todo-display] Add task: Call the dentist (request add-1791382440-1).");
+    todo_model_turn_reply(&M, "Added to today's list.");
+    todo_model_turn_done(&M, T);
+    CHECK(M.add_count == 0);
+    CHECK_STR(M.message, "Added to today's list.");
+
+    /* IDs keep counting, so a second request is a different request. */
+    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    run(40);
+    CHECK(strstr(F.last_turn, "(request add-1791382440-2)") != NULL);
+
+    setup("add_task/batch_with_completion");
+    F.online = false;
+    push(DAY);
+    todo_model_tap(&M, "rosary@1007", T);
+    run(TODO_UNDO_MS + 100);
+    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    F.online = true;
+    run(40);
+    CHECK(F.sends == 1);
+    CHECK_STR(F.last_turn, "[todo-display] Completed: Rosary (id rosary@1007) at 9:14 AM.\n"
+                           "[todo-display] Add task: Buy stamps (request add-1791382440-1).");
+
+    /* Typed while a turn is in flight: it waits for the next turn, not lost. */
+    todo_model_add_task(&M, "Water plants", T, err, sizeof(err));
+    todo_model_turn_done(&M, T);
+    CHECK(M.add_count == 1 && !strcmp(M.adds[0].text, "Water plants"));
+    run(40);
+    CHECK(F.sends == 2);
+    CHECK(strstr(F.last_turn, "Water plants") && !strstr(F.last_turn, "Buy stamps"));
+
+    setup("add_task/error_retry");
+    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    run(40);
+    todo_model_turn_error(&M, T);
+    CHECK(M.add_count == 1 && !M.adds[0].sending);
+    run(10100);
+    CHECK(F.sends == 2);
+
+    setup("add_task/give_up");
+    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    run(40);
+    todo_model_turn_error(&M, T);
+    F.wall += TODO_GIVE_UP_S;
+    run(10100);
+    todo_model_turn_error(&M, T);
+    CHECK(M.add_count == 0);
+    CHECK_STR(M.message, "couldn't reach Muse");
+
+    setup("add_task/reboot");
+    F.online = false;
+    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    char blob[4096];
+    snprintf(blob, sizeof(blob), "%s", F.saved);
+    CHECK(todo_model_restore(&M, blob, T));
+    CHECK(M.add_count == 1 && M.add_seq == 1);
+    CHECK(todo_model_screen(&M) == TODO_SCREEN_IDLE); /* a request alone isn't a list */
+    F.online = true;
+    run(40);
+    CHECK(F.sends == 1);
+    CHECK(strstr(F.last_turn, "Add task: Buy stamps (request add-1791382440-1)") != NULL);
+    todo_model_add_task(&M, "Next", T, err, sizeof(err));
+    CHECK(strstr(M.adds[1].id, "-2") != NULL); /* numbering survives the reboot */
+}
+
 static void test_message_bar(void)
 {
     setup("message_bar");
@@ -676,6 +766,7 @@ int main(void)
     test_muse_marks_done();
     test_celebration();
     test_dance();
+    test_add_task();
     test_message_bar();
     test_reboot_keeps_outbox_and_list();
     test_list_result();
