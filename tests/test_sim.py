@@ -5,10 +5,15 @@ by the virtual clock). Run through ctest from the sim/ build."""
 
 import argparse
 import hashlib
+import os
 import pathlib
 import subprocess
 import sys
 import tempfile
+
+
+# Per-scenario limit in seconds; raise it with TODO_SIM_TIMEOUT on slow machines.
+TIMEOUT = float(os.environ.get("TODO_SIM_TIMEOUT", "120"))
 
 
 def run(binary, scenario, out_dir):
@@ -16,7 +21,7 @@ def run(binary, scenario, out_dir):
         [binary, "--headless", "--scenario", str(scenario), "--out", str(out_dir)],
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=TIMEOUT,
     )
     if proc.returncode != 0:
         sys.stderr.write(proc.stdout + proc.stderr)
@@ -61,7 +66,7 @@ def main():
         for body in ("nonsense\n", "frobnicate=1\n", "set_list=[1]\n", "expect_screen=list\n"):
             bad.write_text(body)
             proc = subprocess.run([args.binary, "--headless", "--scenario", str(bad)],
-                                  capture_output=True, text=True, timeout=60)
+                                  capture_output=True, text=True, timeout=TIMEOUT)
             if proc.returncode == 0:
                 raise SystemExit(f"FAIL bad scenario {body.strip()!r} was accepted")
     print(f"ok   {len(all_shots)} distinct screenshots, bad scenarios rejected")

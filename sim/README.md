@@ -53,7 +53,8 @@ clock (fixed to 2026-10-07 09:14 America/Chicago unless `clock=` sets it).
 | `tap` | `row:<id>`, `undo:<id>` or `message` (a real touch at that spot) |
 | `reply` / `turn_error` | Muse answers / fails the turn in flight |
 | `auto_reply`, `auto_reply_ms` | Reply text Muse sends automatically (`off` to stop), and the delay |
-| `advance` | Run for N ms |
+| `advance` | Run for N ms, drawing every 10 ms frame |
+| `wait` | Skip ahead N ms in 1 s steps without drawing (for waits of minutes) |
 | `peek` | Muse peeks in |
 | `reboot` | Restart from the persisted state |
 | `screenshot` | Save a PNG into `--out` |

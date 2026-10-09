@@ -181,6 +181,26 @@ static void run_for(uint32_t ms, bool real_time)
     }
 }
 
+/*
+ * Skip ahead through a long quiet stretch: the model and screen state keep
+ * up in 1 s steps, but nothing is drawn until the end. For waits measured in
+ * minutes, where drawing every 10 ms frame would take ages.
+ */
+static void wait_for(uint32_t ms)
+{
+    uint32_t end = g.now_ms + ms;
+    while (!g.quit && (int32_t)(end - g.now_ms) > 0) {
+        uint32_t step = end - g.now_ms < 1000u ? end - g.now_ms : 1000u;
+        g.now_ms += step;
+        if (g.reply_due && (int32_t)(g.now_ms - g.reply_due_ms) >= 0) {
+            muse_reply(g.auto_reply);
+        }
+        todo_model_tick(&g.model, g.now_ms);
+        todo_ui_update(g.now_ms);
+    }
+    lv_timer_handler();
+}
+
 static bool screenshot(const char *path)
 {
     lv_refr_now(g.display);
@@ -406,6 +426,8 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
             g.auto_reply_ms = (uint32_t)strtoul(v, NULL, 10);
         } else if (!strcmp(k, "advance")) {
             run_for((uint32_t)strtoul(v, NULL, 10), real_time);
+        } else if (!strcmp(k, "wait")) {
+            wait_for((uint32_t)strtoul(v, NULL, 10));
         } else if (!strcmp(k, "peek")) {
             todo_ui_peek(g.now_ms);
         } else if (!strcmp(k, "reboot")) {

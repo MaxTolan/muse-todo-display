@@ -20,14 +20,14 @@ screenshot=15-message-cleared.png
 
 # Left alone, a short message clears after 30 s; a long one stays 5 minutes.
 message=Short and sweet: gone in 30 s.
-advance=29800
+wait=29800
 expect_message=Short and sweet: gone in 30 s.
 advance=300
 expect_message=
 message=This one is longer than fifty characters, so it stays up for five minutes.
-advance=60000
+wait=60000
 expect_message=This one is longer than fifty characters, so it stays up for five minutes.
-advance=239700
+wait=239700
 expect_message=This one is longer than fifty characters, so it stays up for five minutes.
 advance=400
 expect_message=
