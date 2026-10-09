@@ -2,3 +2,5 @@
 .DS_Store
 # Simulator screenshots from interactive runs (P key)
 todo-sim.png
+# Your Muse SDK token (mgst_...). Never commit it; tools/fw.sh feeds it to the build.
+/sdk_token.local
