@@ -7,6 +7,11 @@
  * which keeps every state change deterministic and testable.
  *
  * Behaviour follows docs/03-ui-spec.md and docs/04-agent-integration.md.
+ *
+ * Threading: the model is not thread-safe. Every todo_model_* call -- from
+ * the command handlers, the chat-turn event reader and the UI -- must hold
+ * the same lock (on the device, the SDK's display/LVGL lock), because the UI
+ * reads the model while it draws.
  */
 #pragma once
 

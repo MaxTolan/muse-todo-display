@@ -66,6 +66,13 @@ target_compile_options(test_todo_model PRIVATE -Wall -Wextra)
 target_compile_definitions(test_todo_model PRIVATE _POSIX_C_SOURCE=200809L)
 add_test(NAME todo_model COMMAND test_todo_model)
 
+add_executable(test_todo_model_oom "${REPO_DIR}/tests/test_todo_model_oom.c")
+target_link_libraries(test_todo_model_oom PRIVATE cjson)
+target_include_directories(test_todo_model_oom PRIVATE "${TODO_COMPONENT_DIR}/include")
+target_compile_options(test_todo_model_oom PRIVATE -Wall -Wextra)
+target_compile_definitions(test_todo_model_oom PRIVATE _POSIX_C_SOURCE=200809L)
+add_test(NAME todo_model_oom COMMAND test_todo_model_oom)
+
 if(NOT TODO_SIM_BUILD_SIMULATOR)
     return()
 endif()

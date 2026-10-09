@@ -9,6 +9,11 @@
 
 #include "cJSON.h"
 
+/* Overridable so the host tests can simulate running out of memory. */
+#ifndef TODO_MALLOC
+#define TODO_MALLOC malloc
+#endif
+
 /* Retry delays after a failed turn (docs/04-agent-integration.md); the last one repeats. */
 static const uint32_t RETRY_MS[] = { 10000u, 30000u, 120000u, 300000u };
 #define RETRY_STAGES (sizeof(RETRY_MS) / sizeof(RETRY_MS[0]))
@@ -335,8 +340,17 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
         return false;
     }
 
-    /* Build into a scratch array so a bad item leaves the current list alone. */
-    static todo_item_t next[TODO_MAX_ITEMS];
+    /*
+     * Build into a scratch array so a bad item leaves the current list alone.
+     * It's ~18 KB, so it lives on the heap (PSRAM on the device) only for this
+     * call rather than permanently in scarce internal RAM.
+     */
+    todo_item_t *next = TODO_MALLOC(TODO_MAX_ITEMS * sizeof(*next));
+    if (!next) {
+        cJSON_Delete(arr);
+        set_err(err, err_len, "%s", "out of memory");
+        return false;
+    }
     size_t count = 0;
     bool ok = true;
     bool completed_by_muse = false;
@@ -418,6 +432,7 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
     }
     cJSON_Delete(arr);
     if (!ok) {
+        free(next);
         return false;
     }
 
@@ -433,6 +448,7 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
         }
         if (count >= TODO_MAX_ITEMS) {
             set_err(err, err_len, "%s", "too many items waiting to send");
+            free(next);
             return false;
         }
         next[count] = *old;
@@ -442,6 +458,7 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
 
     int open_before = m->have_list ? open_count(m) : 0;
     memcpy(m->items, next, count * sizeof(next[0]));
+    free(next);
     m->count = count;
     m->have_list = true;
     copy_str(m->date, sizeof(m->date), date ? date : "");
@@ -529,7 +546,7 @@ static char *build_turn(const todo_model_t *m)
             cap += 128 + strlen(m->items[i].label) + strlen(m->items[i].id) + strlen(m->items[i].source);
         }
     }
-    char *text = malloc(cap);
+    char *text = TODO_MALLOC(cap);
     if (!text) {
         return NULL;
     }
@@ -644,6 +661,7 @@ static void try_send(todo_model_t *m, uint32_t now)
     }
     char *text = build_turn(m);
     if (!text) {
+        m->next_send_ms = now + TODO_REFUSED_RETRY_MS; /* out of memory: try again shortly, not every frame */
         return;
     }
     bool sent = m->port.send_turn(m->port.ctx, text);
