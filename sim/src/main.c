@@ -156,6 +156,15 @@ static void clamped_mouse_read(lv_indev_t *indev, lv_indev_data_t *data)
     data->point.y = LV_CLAMP(0, data->point.y, SCREEN_H - 1);
 }
 
+/* Pixels LVGL marks for redraw, for checking that a still screen stays still. */
+static unsigned long long s_redraw_px;
+
+static void invalidate_cb(lv_event_t *e)
+{
+    const lv_area_t *a = lv_event_get_param(e);
+    s_redraw_px += (unsigned long long)lv_area_get_size(a);
+}
+
 /* ---- main loop ----------------------------------------------------------- */
 
 static void frame(void)
@@ -428,6 +437,13 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
             run_for((uint32_t)strtoul(v, NULL, 10), real_time);
         } else if (!strcmp(k, "wait")) {
             wait_for((uint32_t)strtoul(v, NULL, 10));
+        } else if (!strcmp(k, "redraw_reset")) {
+            s_redraw_px = 0;
+        } else if (!strcmp(k, "expect_redraw_max")) {
+            char got[32];
+            snprintf(got, sizeof(got), "%llu px", s_redraw_px);
+            check(s_redraw_px <= strtoull(v, NULL, 10), line_no, v, got);
+            printf("[%7u] redrawn since reset: %s\n", g.now_ms, got);
         } else if (!strcmp(k, "peek")) {
             todo_ui_peek(g.now_ms);
         } else if (!strcmp(k, "reboot")) {
@@ -604,6 +620,7 @@ int main(int argc, char **argv)
     lv_tick_set_cb(tick_cb);
     lv_sdl_window_set_title(g.display, "Muse Todo Display (800x480)");
     lv_sdl_window_set_resizeable(g.display, false);
+    lv_display_add_event_cb(g.display, invalidate_cb, LV_EVENT_INVALIDATE_AREA, NULL);
     lv_indev_t *mouse = lv_sdl_mouse_create();
     s_sdl_mouse_read = lv_indev_get_read_cb(mouse);
     lv_indev_set_read_cb(mouse, clamped_mouse_read);

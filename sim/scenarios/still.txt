@@ -1,0 +1,25 @@
+# Nothing changes -> nothing is redrawn. Every frame of the ESP32's 800x480
+# screen is software-rendered, so a still list must cost nothing.
+clock=2026-10-07 09:14
+list_date=Wednesday, October 7
+set_list_file=day.json
+advance=1500
+redraw_reset=1
+advance=3000
+expect_redraw_max=0
+
+# A row that finished its undo window and is waiting offline is still too.
+online=false
+tap=row:vit-am@2026-10-07
+advance=6000
+expect_state=vit-am@2026-10-07 queued
+redraw_reset=1
+advance=3000
+expect_redraw_max=0
+
+# The progress pill and checkboxes settle after the tap; so does a pushed update.
+set_list_file=day-noon.json
+advance=4500
+redraw_reset=1
+advance=2000
+expect_redraw_max=0

@@ -174,11 +174,61 @@ static float since(uint32_t then)
     return (float)(uint32_t)(s.now - then);
 }
 
+/*
+ * LVGL's setters redraw and re-lay out the object even when the value is
+ * unchanged, and the ESP32 software-renders every redrawn pixel. Anything set
+ * from the per-frame path goes through these, which only call LVGL on change.
+ */
+static void set_w(lv_obj_t *o, int32_t v)
+{
+    if (lv_obj_get_style_width(o, LV_PART_MAIN) != v) {
+        lv_obj_set_width(o, v);
+    }
+}
+
+static void set_h(lv_obj_t *o, int32_t v)
+{
+    if (lv_obj_get_style_height(o, LV_PART_MAIN) != v) {
+        lv_obj_set_height(o, v);
+    }
+}
+
+static void set_xy(lv_obj_t *o, int32_t x, int32_t y)
+{
+    if (lv_obj_get_style_x(o, LV_PART_MAIN) != x || lv_obj_get_style_y(o, LV_PART_MAIN) != y) {
+        lv_obj_set_pos(o, x, y);
+    }
+}
+
+static void set_pad_bottom(lv_obj_t *o, int32_t v)
+{
+    if (lv_obj_get_style_pad_bottom(o, LV_PART_MAIN) != v) {
+        lv_obj_set_style_pad_bottom(o, v, 0);
+    }
+}
+
+static void set_opa(lv_obj_t *o, lv_opa_t v)
+{
+    if (lv_obj_get_style_opa(o, LV_PART_MAIN) != v) {
+        lv_obj_set_style_opa(o, v, 0);
+    }
+}
+
+static void set_bg_opa(lv_obj_t *o, lv_opa_t v)
+{
+    if (lv_obj_get_style_bg_opa(o, LV_PART_MAIN) != v) {
+        lv_obj_set_style_bg_opa(o, v, 0);
+    }
+}
+
 static void scale_obj(lv_obj_t *o, float k)
 {
     int32_t v = (int32_t)lroundf(256 * k);
-    lv_obj_set_style_transform_scale_x(o, v, 0);
-    lv_obj_set_style_transform_scale_y(o, v, 0);
+    if (lv_obj_get_style_transform_scale_x(o, LV_PART_MAIN) != v
+        || lv_obj_get_style_transform_scale_y(o, LV_PART_MAIN) != v) {
+        lv_obj_set_style_transform_scale_x(o, v, 0);
+        lv_obj_set_style_transform_scale_y(o, v, 0);
+    }
 }
 
 static void format_clock(time_t t, char *out, size_t len)
@@ -449,7 +499,7 @@ static void row_animate(row_t *r, const todo_item_t *it)
 
     if (it->state == TODO_ROW_UNDO) {
         float left = 1.0f - clamp01(since(it->state_ms) / TODO_UNDO_MS);
-        lv_obj_set_width(r->undo_bar, (int32_t)lroundf(124 * left));
+        set_w(r->undo_bar, (int32_t)lroundf(124 * left));
     }
 
     /* A happy pink swoosh across the label as it's crossed out. */
@@ -462,10 +512,10 @@ static void row_animate(row_t *r, const todo_item_t *it)
         int32_t max_w = lv_obj_get_width(r->label);
         lv_text_get_size(&size, it->label, font, 0, 0, max_w, LV_TEXT_FLAG_NONE);
         int32_t w = size.x < max_w ? size.x : max_w;
-        lv_obj_set_width(r->swoosh, (int32_t)lroundf((float)(w + 12) * ease_out(t / 0.6f)));
-        lv_obj_set_style_bg_opa(r->swoosh, (lv_opa_t)lroundf(255 * (1 - clamp01((t - 0.6f) / 0.4f))), 0);
-        lv_obj_set_pos(r->swoosh, lv_obj_get_x(r->label) - 6,
-                       lv_obj_get_y(r->label) + lv_font_get_line_height(font) / 2 - 3);
+        set_w(r->swoosh, (int32_t)lroundf((float)(w + 12) * ease_out(t / 0.6f)));
+        set_bg_opa(r->swoosh, (lv_opa_t)lroundf(255 * (1 - clamp01((t - 0.6f) / 0.4f))));
+        set_xy(r->swoosh, lv_obj_get_x(r->label) - 6,
+               lv_obj_get_y(r->label) + lv_font_get_line_height(font) / 2 - 3);
     }
 
     /* Hop away: a little jump to the right, fade, then the gap closes. */
@@ -476,11 +526,11 @@ static void row_animate(row_t *r, const todo_item_t *it)
         }
         lv_obj_set_style_translate_x(r->row, (int32_t)lroundf(90 * t * t), 0);
         lv_obj_set_style_translate_y(r->row, (int32_t)lroundf(-18 * sinf(PI_F * clamp01(t / 0.6f))), 0);
-        lv_obj_set_style_opa(r->row, (lv_opa_t)lroundf(255 * (1 - clamp01(t / 0.7f))), 0);
+        set_opa(r->row, (lv_opa_t)lroundf(255 * (1 - clamp01(t / 0.7f))));
         if (t > 0.5f) {
             float c = (t - 0.5f) / 0.5f;
             lv_obj_set_style_min_height(r->row, 0, 0);
-            lv_obj_set_height(r->row, (int32_t)lroundf((float)r->leave_h * (1 - ease_out(c))));
+            set_h(r->row, (int32_t)lroundf((float)r->leave_h * (1 - ease_out(c))));
             lv_obj_set_style_pad_ver(r->row, (int32_t)lroundf(12 * (1 - c)), 0);
         }
     }
@@ -731,7 +781,7 @@ static void update_top(todo_screen_t screen)
     todo_model_progress(s.model, &done, &total);
     snprintf(buf, sizeof(buf), "%d of %d done", done, total);
     set_text(s.pill_label, buf);
-    lv_obj_set_width(s.pill_fill, total ? 200 * done / total : 0);
+    set_w(s.pill_fill, total ? 200 * done / total : 0);
     show(s.pill, s.model->have_list);
     show(s.top, screen != TODO_SCREEN_IDLE);
 }
@@ -751,7 +801,7 @@ static void update_peek(bool draw)
     }
     /* Slide up, hold, slide down. */
     float up = t < 400 ? ease_out(t / 400) : (t > PEEK_MS - 400 ? 1 - ease_out((t - (PEEK_MS - 400)) / 400) : 1);
-    lv_obj_set_y(s.peek_muse, TOP_H - (int32_t)lroundf(78 * up));
+    set_xy(s.peek_muse, lv_obj_get_style_x(s.peek_muse, LV_PART_MAIN), TOP_H - (int32_t)lroundf(78 * up));
     if (draw) {
         todo_mascot_pose_t pose = { .t = s.now / 1000.0f, .happy = 0, .hat_lift = 0, .hat_tilt = 0 };
         todo_mascot_draw(s.peek_muse, &pose);
@@ -773,7 +823,7 @@ static void update_bar(bool draw)
     }
     s.bar_on = want;
     show(s.bar, want);
-    lv_obj_set_style_pad_bottom(s.main, want ? 108 : 0, 0);
+    set_pad_bottom(s.main, want ? 108 : 0);
     if (!want) {
         return;
     }
@@ -781,7 +831,7 @@ static void update_bar(bool draw)
     lv_obj_update_layout(s.bar);
     int32_t h = lv_obj_get_height(s.bar);
     /* Slides up from below the screen to rest 14 px above the bottom edge. */
-    lv_obj_set_pos(s.bar, 16, SCREEN_H - (int32_t)lroundf((float)(h + 14) * t));
+    set_xy(s.bar, 16, SCREEN_H - (int32_t)lroundf((float)(h + 14) * t));
     if (draw) {
         todo_mascot_pose_t pose = { .t = s.now / 1000.0f + 1.7f };
         todo_mascot_draw(s.bar_muse, &pose);

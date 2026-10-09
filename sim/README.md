@@ -58,6 +58,7 @@ clock (fixed to 2026-10-07 09:14 America/Chicago unless `clock=` sets it).
 | `peek` | Muse peeks in |
 | `reboot` | Restart from the persisted state |
 | `screenshot` | Save a PNG into `--out` |
+| `redraw_reset`, `expect_redraw_max` | Zero the redrawn-pixel count / fail if more than N pixels were redrawn since |
 | `expect_screen` | `idle`, `list`, `celebrate`, `all_done` |
 | `expect_state` | `<id> <open\|undo\|queued\|sending\|auto_done\|leaving\|hidden\|gone>` |
 | `expect_turn`, `expect_turns`, `expect_message` | Last turn contains text / number of turns / message bar text |
