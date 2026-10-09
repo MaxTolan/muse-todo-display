@@ -39,6 +39,7 @@ extern "C" {
 #define TODO_AUTO_DONE_SHOW_MS 3000u
 #define TODO_LEAVE_MS 450u
 #define TODO_CELEBRATE_MS 2000u
+#define TODO_DANCE_MS 2000u /* happy dance on each completion (issue #1) */
 /* Message bar: short messages clear sooner than long ones (owner's choice). */
 #define TODO_MESSAGE_SHORT_CHARS 50
 #define TODO_MESSAGE_SHORT_MS 30000u
@@ -122,6 +123,10 @@ typedef struct {
     /* All-done celebration. */
     bool celebrating;
     uint32_t celebrate_ms;
+
+    /* Little happy dance on each completion; a new one restarts the timer. */
+    bool dancing;
+    uint32_t dance_ms;
 
     /* Bumps on any change the UI should redraw for. */
     uint32_t seq;

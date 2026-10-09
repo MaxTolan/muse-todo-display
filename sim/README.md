@@ -51,6 +51,7 @@ clock (fixed to 2026-10-07 09:14 America/Chicago unless `clock=` sets it).
 | `set_list_expect_error` | JSON that must be rejected |
 | `message` | `todo.show_message` text |
 | `tap` | `row:<id>`, `undo:<id>` or `message` (a real touch at that spot) |
+| `tap_at` | `x,y`: a touch at exact screen coordinates |
 | `reply` / `turn_error` | Muse answers / fails the turn in flight |
 | `auto_reply`, `auto_reply_ms` | Reply text Muse sends automatically (`off` to stop), and the delay |
 | `advance` | Run for N ms, drawing every 10 ms frame |

@@ -1,0 +1,37 @@
+# A happy dance on every completion (issue #1).
+clock=2026-10-07 08:05
+list_date=Wednesday, October 7
+set_list_file=day.json
+online=false
+advance=500
+
+# Tap: Muse pops up from the bottom corner and dances.
+tap=row:rosary@2026-10-07
+advance=700
+screenshot=18-dance-corner.png
+
+# The dancer isn't clickable: a tap on it lands on the row underneath
+# (Vitamins AM's right-hand side, behind Muse).
+tap_at=700,420
+expect_state=vit-am@2026-10-07 undo
+advance=2200
+tap=undo:vit-am@2026-10-07
+expect_state=vit-am@2026-10-07 open
+
+# With a message showing, it dances on top of the bar.
+message=Good morning! Nine things today.
+advance=600
+tap=row:bible@2026-10-07
+advance=900
+screenshot=19-dance-on-bar.png
+
+# Undo calls it off.
+tap=undo:bible@2026-10-07
+advance=100
+expect_state=bible@2026-10-07 open
+
+# HealthKit completions dance too.
+set_list_file=day-noon.json
+advance=800
+screenshot=20-dance-healthkit.png
+advance=2000

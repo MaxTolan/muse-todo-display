@@ -73,7 +73,19 @@ marks them.
   would bring back an item the owner just checked off.
 - Items not in the new list disappear (unless they're in the outbox — the outbox still sends).
 
-## Celebration (issue #1)
+## Happy dance on every completion (issue #1)
+
+- Each completion gets a two-second happy dance from a small top-hat Muse (the avatar's
+  happy pose: hop, ^ ^ eyes, arms up, pixel hearts, with a wiggling hat).
+- It starts at the tap (not when the undo window ends), so it feels instant; Undo stops it.
+  Items Muse marks done (HealthKit etc.) dance too. Another completion while it's dancing
+  restarts the two seconds rather than stacking dancers.
+- Placement (owner's choice, Oct 9): bottom right, popping up from behind the message bar when
+  it's showing, otherwise from the bottom edge of the screen. Muse isn't clickable, so taps on
+  the row underneath still land.
+- The last item gets the full celebration below instead.
+
+## Celebration when everything is done (issue #1)
 
 - When the last open item becomes done (by tap or by Muse), play a two-second top-hat Muse
   celebration animation (the agent's avatar: fuzzy form, black top hat — keep it simple, e.g. a

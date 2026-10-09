@@ -486,6 +486,64 @@ static void test_celebration(void)
     CHECK(todo_model_screen(&M) == TODO_SCREEN_LIST);
 }
 
+static void test_dance(void)
+{
+    setup("dance/tap");
+    push(DAY);
+    CHECK(!M.dancing);
+    todo_model_tap(&M, "rosary@1007", T);
+    CHECK(M.dancing); /* right at the tap, not after the undo window */
+    run(1900);
+    CHECK(M.dancing);
+    run(200);
+    CHECK(!M.dancing);
+
+    setup("dance/extends");
+    push(DAY);
+    todo_model_tap(&M, "rosary@1007", T);
+    run(1500);
+    todo_model_tap(&M, "vit-am@1007", T); /* a second completion restarts it */
+    run(1900);
+    CHECK(M.dancing);
+    run(200);
+    CHECK(!M.dancing);
+
+    setup("dance/undo");
+    push(DAY);
+    todo_model_tap(&M, "rosary@1007", T);
+    run(500);
+    todo_model_undo(&M, "rosary@1007", T);
+    CHECK(!M.dancing);
+
+    setup("dance/healthkit");
+    push(DAY);
+    run(3000);
+    push("[{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\"},"
+         "{\"id\":\"vit-am@1007\",\"label\":\"Vitamins AM\",\"source\":\"manual\"},"
+         "{\"id\":\"steps@1007\",\"label\":\"10,000 steps\",\"source\":\"healthkit\",\"done\":true}]");
+    CHECK(M.dancing);
+
+    /* A push that only repeats what's already done doesn't dance again. */
+    run(2100);
+    CHECK(!M.dancing);
+    push("[{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\"},"
+         "{\"id\":\"vit-am@1007\",\"label\":\"Vitamins AM\",\"source\":\"manual\"},"
+         "{\"id\":\"steps@1007\",\"label\":\"10,000 steps\",\"source\":\"healthkit\",\"done\":true}]");
+    CHECK(!M.dancing);
+    /* Nor does a list that arrives already done. */
+    setup("dance/arrives_done");
+    push("[{\"id\":\"s\",\"label\":\"Steps\",\"source\":\"healthkit\",\"done\":true}]");
+    CHECK(!M.dancing);
+
+    /* The last item: the full celebration replaces the dance. */
+    setup("dance/last_item");
+    push("[{\"id\":\"s\",\"label\":\"Steps\",\"source\":\"healthkit\"},"
+         "{\"id\":\"r\",\"label\":\"Rosary\",\"source\":\"manual\"}]");
+    push("[{\"id\":\"s\",\"label\":\"Steps\",\"source\":\"healthkit\",\"done\":true},"
+         "{\"id\":\"r\",\"label\":\"Rosary\",\"source\":\"manual\",\"done\":true}]");
+    CHECK(M.celebrating && !M.dancing);
+}
+
 static void test_message_bar(void)
 {
     setup("message_bar");
@@ -617,6 +675,7 @@ int main(void)
     test_push_keeps_local_state();
     test_muse_marks_done();
     test_celebration();
+    test_dance();
     test_message_bar();
     test_reboot_keeps_outbox_and_list();
     test_list_result();

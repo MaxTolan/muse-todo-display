@@ -39,6 +39,9 @@
 #define MASCOT_FRAME_MS 80u
 #define BAR_SLIDE_MS 260u
 #define CONFETTI_N 28
+#define DANCER_PX 128
+#define DANCER_RISE_MS 220.0f
+#define DANCER_DROP_MS 260.0f
 
 #define PI_F 3.14159265f
 
@@ -102,6 +105,8 @@ static struct {
     lv_obj_t *party_muse;
     lv_obj_t *party_title;
     lv_obj_t *confetti[CONFETTI_N];
+
+    lv_obj_t *dancer;
 
     lv_obj_t *bar;
     lv_obj_t *bar_muse;
@@ -685,6 +690,20 @@ static void build_party(void)
     lv_obj_align(s.party_title, LV_ALIGN_BOTTOM_MID, 0, -18);
 }
 
+/*
+ * The little dancer pops up at the bottom right for each completion: from
+ * behind the message bar when it's showing, otherwise from the bottom edge.
+ * Built before the bar so the bar hides its feet. Not clickable, so taps on
+ * rows underneath still land.
+ */
+static void build_dancer(void)
+{
+    s.dancer = todo_mascot_create(s.root, DANCER_PX);
+    lv_obj_add_flag(s.dancer, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_set_pos(s.dancer, SCREEN_W - DANCER_PX - 28, SCREEN_H);
+    show(s.dancer, false);
+}
+
 static void build_bar(void)
 {
     s.bar = box(s.root);
@@ -758,6 +777,7 @@ void todo_ui_create(lv_obj_t *parent, todo_model_t *model)
 
     build_done();
     build_party();
+    build_dancer();
     build_bar();
     build_idle(parent);
 }
@@ -899,6 +919,34 @@ static void update_party(bool draw)
     }
 }
 
+static void update_dancer(todo_screen_t screen, bool draw)
+{
+    const todo_model_t *m = s.model;
+    bool on = m->dancing && screen == TODO_SCREEN_LIST;
+    show(s.dancer, on);
+    if (!on) {
+        return;
+    }
+    float t = since(m->dance_ms);
+    float up = t < DANCER_RISE_MS ? ease_out(t / DANCER_RISE_MS)
+             : (t > TODO_DANCE_MS - DANCER_DROP_MS ? 1 - ease_out((t - (TODO_DANCE_MS - DANCER_DROP_MS)) / DANCER_DROP_MS)
+                                                    : 1);
+    /* Where its feet rest: on the bar's top edge, or just below the screen edge. */
+    int32_t floor_y = s.bar_on ? lv_obj_get_y(s.bar) + 22 : SCREEN_H + 6;
+    int32_t visible = DANCER_PX + 2; /* hat to feet */
+    set_xy(s.dancer, SCREEN_W - DANCER_PX - 28, floor_y - (int32_t)lroundf((float)visible * up));
+    if (draw) {
+        float sec = t / 1000.0f;
+        todo_mascot_pose_t pose = {
+            .t = s.now / 1000.0f,
+            .happy = 1.0f,
+            .hat_lift = 1.5f * fabsf(sinf(sec * 7.0f)),
+            .hat_tilt = 0.35f * sinf(sec * 14.0f),
+        };
+        todo_mascot_draw(s.dancer, &pose);
+    }
+}
+
 void todo_ui_peek(uint32_t now_ms)
 {
     s.peek_on = true;
@@ -954,6 +1002,7 @@ void todo_ui_update(uint32_t now_ms)
     }
     update_peek(draw && screen != TODO_SCREEN_IDLE);
     update_bar(draw);
+    update_dancer(screen, draw);
 }
 
 bool todo_ui_point_for(const char *target, lv_point_t *pt)

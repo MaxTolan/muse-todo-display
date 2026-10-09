@@ -234,6 +234,15 @@ static bool screenshot(const char *path)
     return ok;
 }
 
+static void tap_point(lv_point_t pt, bool real_time)
+{
+    g.touch_pt = pt;
+    g.touch_down = true;
+    run_for(TAP_HOLD_MS, real_time);
+    g.touch_down = false;
+    run_for(40, real_time);
+}
+
 static void tap(const char *target, bool real_time)
 {
     lv_point_t pt;
@@ -242,11 +251,7 @@ static void tap(const char *target, bool real_time)
         g.failures++;
         return;
     }
-    g.touch_pt = pt;
-    g.touch_down = true;
-    run_for(TAP_HOLD_MS, real_time);
-    g.touch_down = false;
-    run_for(40, real_time);
+    tap_point(pt, real_time);
 }
 
 static void reboot(void)
@@ -425,6 +430,12 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
             ok = todo_model_show_message(&g.model, v, g.now_ms, err, sizeof(err));
         } else if (!strcmp(k, "tap")) {
             tap(v, real_time);
+        } else if (!strcmp(k, "tap_at")) {
+            int x, y;
+            ok = sscanf(v, "%d,%d", &x, &y) == 2;
+            if (ok) {
+                tap_point((lv_point_t){ x, y }, real_time);
+            }
         } else if (!strcmp(k, "reply")) {
             muse_reply(v);
         } else if (!strcmp(k, "turn_error")) {

@@ -94,8 +94,15 @@ static void set_state(todo_item_t *it, todo_row_state_t st, uint32_t now)
     it->state_ms = now;
 }
 
+static void start_dance(todo_model_t *m, uint32_t now)
+{
+    m->dancing = true;
+    m->dance_ms = now;
+}
+
 static void start_celebration(todo_model_t *m, uint32_t now)
 {
+    m->dancing = false; /* the big celebration takes over */
     m->celebrating = true;
     m->celebrate_ms = now;
 }
@@ -462,6 +469,9 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
     m->count = count;
     m->have_list = true;
     copy_str(m->date, sizeof(m->date), date ? date : "");
+    if (completed_by_muse) {
+        start_dance(m, now_ms);
+    }
     if (open_before > 0 && completed_by_muse && open_count(m) == 0) {
         start_celebration(m, now_ms);
     }
@@ -499,6 +509,7 @@ bool todo_model_tap(todo_model_t *m, const char *id, uint32_t now_ms)
     it->tap_ms = now_ms ? now_ms : 1;
     it->completed_at = wall_now(m);
     set_state(it, TODO_ROW_UNDO, now_ms);
+    start_dance(m, now_ms);
     m->seq++;
     return true;
 }
@@ -511,6 +522,7 @@ bool todo_model_undo(todo_model_t *m, const char *id, uint32_t now_ms)
     }
     it->completed_at = 0;
     set_state(it, TODO_ROW_OPEN, now_ms);
+    m->dancing = false; /* never mind, then */
     m->seq++;
     return true;
 }
@@ -730,6 +742,10 @@ void todo_model_tick(todo_model_t *m, uint32_t now_ms)
         save(m);
     }
 
+    if (m->dancing && elapsed(now_ms, m->dance_ms, TODO_DANCE_MS)) {
+        m->dancing = false;
+        m->seq++;
+    }
     if (m->celebrating && elapsed(now_ms, m->celebrate_ms, TODO_CELEBRATE_MS)) {
         m->celebrating = false;
         m->seq++;
