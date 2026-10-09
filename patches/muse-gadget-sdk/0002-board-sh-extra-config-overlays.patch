@@ -1,0 +1,13 @@
+diff --git a/esp32/tools/muse/board.sh b/esp32/tools/muse/board.sh
+index 714ec62..31f1d26 100755
+--- a/esp32/tools/muse/board.sh
++++ b/esp32/tools/muse/board.sh
+@@ -63,6 +63,8 @@ defaults="sdkconfig.defaults;devices/sdkconfig.muse;devices/sdkconfig.muse-$prof
+ if [ -n "${MUSE_BENCH:-}" ]; then
+     B=$B-bench; defaults="$defaults;devices/sdkconfig.muse-bench"
+ fi
++# Extra overlays from the caller (e.g. a private one carrying the SDK token).
++[ -n "${MUSE_EXTRA_DEFAULTS:-}" ] && defaults="$defaults;$MUSE_EXTRA_DEFAULTS"
+ log=/tmp/muse_build_$board.log
+ if [ "$cmd" = build ]; then
+     # Boards share managed_components/ with each other and with the Link build,
