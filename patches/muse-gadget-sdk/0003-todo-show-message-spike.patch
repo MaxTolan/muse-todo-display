@@ -1,0 +1,81 @@
+diff --git a/esp32/main/Kconfig.projbuild b/esp32/main/Kconfig.projbuild
+index d0fb1d8..d9b393e 100644
+--- a/esp32/main/Kconfig.projbuild
++++ b/esp32/main/Kconfig.projbuild
+@@ -264,6 +264,14 @@ menu "ESP32 Device SDK"
+             switch is on, the button keeps its setup role (tap to confirm
+             pairing, hold to reset).
+ 
++    config TODO_DISPLAY
++        bool "Muse todo display commands (todo.*)"
++        depends on MUSE_ENABLED
++        default n
++        help
++            Commands for the desk todo display (github.com/MaxTolan/muse-todo-display).
++            todo.show_message shows a short message from Muse on the screen.
++
+     config HOMEHUB_SENSECAP_SENSORS
+         bool "SenseCAP Indicator air sensors (sensors.read)"
+         depends on HOMEHUB_LED_BACKEND_SENSECAP_ST7701
+diff --git a/esp32/main/app.c b/esp32/main/app.c
+index 2cfb86a..1b91e3a 100644
+--- a/esp32/main/app.c
++++ b/esp32/main/app.c
+@@ -71,6 +71,9 @@
+ #if CONFIG_MUSE_WATCHER_CAMERA
+ #include "boards/watcher_camera.h"
+ #endif
++#if CONFIG_TODO_DISPLAY
++#include "muse_state.h"
++#endif
+ #if CONFIG_MUSE_ENABLED
+ #include "muse_glue.h"
+ // Muse joins Wi-Fi from its own settings, before or without pairing.
+@@ -1895,6 +1898,23 @@ static cJSON *on_ws_command(
+         return voice_configure_command(params);
+     }
+ #endif
++#if CONFIG_TODO_DISPLAY
++    if (strcmp(command, "todo.show_message") == 0) {
++        cJSON *text = params ? cJSON_GetObjectItem(params, "text") : NULL;
++        if (!cJSON_IsString(text) || !text->valuestring || !*text->valuestring) {
++            return command_error("invalid_params", "text is required");
++        }
++        if (strlen(text->valuestring) > 280) {
++            return command_error("invalid_params", "text too long (max 280)");
++        }
++        /* Spike: show it as the screen's caption; the todo screen replaces this. */
++        muse_state_set_caption("%s", text->valuestring);
++        ESP_LOGI(TAG, "todo.show_message: %s", text->valuestring);
++        cJSON *result = cJSON_CreateObject();
++        cJSON_AddBoolToObject(result, "ok", true);
++        return result;
++    }
++#endif
+ #if CONFIG_HOMEHUB_SENSECAP_SENSORS
+     if (strcmp(command, "sensors.read") == 0) {
+         return sensecap_sensors_command();
+diff --git a/esp32/main/noise_control.cpp b/esp32/main/noise_control.cpp
+index 2ba3e31..61d6229 100644
+--- a/esp32/main/noise_control.cpp
++++ b/esp32/main/noise_control.cpp
+@@ -1368,6 +1368,19 @@ static char *build_register_json(void) {
+                 nullptr, volume_optional);
+ #endif
+ 
++#if CONFIG_TODO_DISPLAY
++    {
++        cJSON *message_required = cJSON_CreateObject();
++        cJSON_AddItemToObject(message_required, "text",
++                              string_param("The message, at most 280 characters."));
++        add_command(commands, "todo.show_message",
++                    "Show a short message on the owner's desk todo display: a "
++                    "reminder, encouragement or a note. It replaces any message "
++                    "already showing.",
++                    message_required, nullptr);
++    }
++#endif
++
+ #if CONFIG_HOMEHUB_SENSECAP_SENSORS
+     add_command(commands, "sensors.read",
+                 "Read the air sensors: CO2 in ppm, the tVOC index (1-500, 100 "

@@ -61,7 +61,7 @@ if os.path.exists(cfg):
     if new != text:
         open(cfg, "w").write(new)
 PY
-    export MUSE_EXTRA_DEFAULTS="$BUILD/sdkconfig.token"
+    export MUSE_EXTRA_DEFAULTS="$ROOT/firmware/sdkconfig.todo;$BUILD/sdkconfig.token"
 }
 
 idf_env() {

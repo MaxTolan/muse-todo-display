@@ -1,0 +1,17 @@
+# Todo display settings, loaded after the SDK's overlays for the 5" board
+# (tools/fw.sh passes it to board.sh with MUSE_EXTRA_DEFAULTS).
+
+# todo.* commands for Muse (patches/muse-gadget-sdk/0003-*).
+CONFIG_TODO_DISPLAY=y
+
+# The todo screen's type sizes, on top of the SDK's 14/16/20/28
+# (docs/05-open-questions-and-build.md, "Fonts").
+CONFIG_LV_FONT_MONTSERRAT_24=y
+CONFIG_LV_FONT_MONTSERRAT_32=y
+CONFIG_LV_FONT_MONTSERRAT_40=y
+CONFIG_LV_FONT_MONTSERRAT_48=y
+
+# The add-task sheet (issue #2). LVGL enables these by default; say so
+# explicitly so an SDK change can't drop them.
+CONFIG_LV_USE_KEYBOARD=y
+CONFIG_LV_USE_TEXTAREA=y
