@@ -35,10 +35,10 @@ index 0c18ced..4ddd58d 100644
      # The Muse tools' serial port: the console UART behind the board's USB
 diff --git a/esp32/components/muse/boards/board_waveshare_s3_lcd5.c b/esp32/components/muse/boards/board_waveshare_s3_lcd5.c
 new file mode 100644
-index 0000000..c7a9f7d
+index 0000000..881b3ae
 --- /dev/null
 +++ b/esp32/components/muse/boards/board_waveshare_s3_lcd5.c
-@@ -0,0 +1,328 @@
+@@ -0,0 +1,364 @@
 +/*
 + * Copyright (c) Meta Platforms, Inc. and affiliates.
 + * Licensed under the Apache License, Version 2.0.
@@ -56,6 +56,7 @@ index 0000000..c7a9f7d
 +
 +#include "driver/gpio.h"
 +#include "driver/i2c_master.h"
++#include "esp_attr.h"
 +#include "esp_check.h"
 +#include "esp_lcd_panel_io.h"
 +#include "esp_lcd_panel_ops.h"
@@ -77,7 +78,16 @@ index 0000000..c7a9f7d
 + * pins, GT911, CH422G bit map (EXIO1 touch reset, EXIO2 backlight, EXIO3 LCD
 + * reset) and 16 MB flash / 8 MB octal PSRAM, per Waveshare's 5" LVGL v9 demo
 + * (waveshareteam/ESP32-S3-Touch-LCD-5). Differences: vertical porches 16/16,
-+ * and the USB-C goes to the chip's own USB Serial/JTAG rather than a CH343.
++ * the USB-C goes to the chip's own USB Serial/JTAG rather than a CH343, and
++ * the display is double-buffered (below).
++ *
++ * Double buffering: with one frame buffer, LVGL draws into the buffer the
++ * panel is being refreshed from, so anything animating tears (shows half
++ * old, half new for a frame). Here LVGL draws into the hidden one of two
++ * buffers; at the end of a refresh the flush hands it to the driver, and
++ * waits until the driver has started sending the new buffer (its bounce
++ * buffers have copied a whole frame) before LVGL may draw into the old one.
++ * LVGL's direct mode keeps the two buffers in sync.
 + */
 +#define LCD_W 800
 +#define LCD_H 480
@@ -102,6 +112,7 @@ index 0000000..c7a9f7d
 +static SemaphoreHandle_t s_started;
 +static esp_err_t s_start_err;
 +static bool s_was_pressed;
++static SemaphoreHandle_t s_frame_done; /* the driver switched to the buffer we handed it */
 +
 +static esp_err_t exp_write(uint8_t state)
 +{
@@ -135,6 +146,19 @@ index 0000000..c7a9f7d
 +    return exp_write(EXP_IDLE);
 +}
 +
++/* ISR: the bounce buffers just finished copying a whole frame; the next one
++ * comes from whichever buffer the last flush handed over. */
++static bool IRAM_ATTR frame_buf_complete(esp_lcd_panel_handle_t panel, const esp_lcd_rgb_panel_event_data_t *edata,
++                                         void *user_ctx)
++{
++    (void)panel;
++    (void)edata;
++    (void)user_ctx;
++    BaseType_t woken = pdFALSE;
++    xSemaphoreGiveFromISR(s_frame_done, &woken);
++    return woken == pdTRUE;
++}
++
 +static esp_err_t panel_start(void)
 +{
 +    /* Reset the RGB panel through EXIO3. */
@@ -160,7 +184,7 @@ index 0000000..c7a9f7d
 +        .data_width = 16,
 +        .in_color_format = LCD_COLOR_FMT_RGB565,
 +        .out_color_format = LCD_COLOR_FMT_RGB565,
-+        .num_fbs = 1,
++        .num_fbs = 2,
 +        .bounce_buffer_size_px = LCD_W * 10,
 +        .dma_burst_size = 64,
 +        .hsync_gpio_num = GPIO_NUM_46,
@@ -173,6 +197,12 @@ index 0000000..c7a9f7d
 +        .flags.fb_in_psram = true,
 +    };
 +    ESP_RETURN_ON_ERROR(esp_lcd_new_rgb_panel(&cfg, &s_panel), TAG, "RGB panel");
++    s_frame_done = xSemaphoreCreateBinary();
++    ESP_RETURN_ON_FALSE(s_frame_done, ESP_ERR_NO_MEM, TAG, "frame semaphore");
++    const esp_lcd_rgb_panel_event_callbacks_t cbs = {
++        .on_frame_buf_complete = frame_buf_complete,
++    };
++    ESP_RETURN_ON_ERROR(esp_lcd_rgb_panel_register_event_callbacks(s_panel, &cbs, NULL), TAG, "RGB events");
 +    ESP_RETURN_ON_ERROR(esp_lcd_panel_init(s_panel), TAG, "RGB start");
 +    return ESP_OK;
 +}
@@ -223,8 +253,13 @@ index 0000000..c7a9f7d
 +static void flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
 +{
 +    (void)area;
-+    (void)px;
-+    /* LVGL renders directly into the RGB controller's continuously scanned FB. */
++    if (lv_display_flush_is_last(disp)) {
++        /* px is the whole buffer LVGL just finished: show it from the next frame. */
++        xSemaphoreTake(s_frame_done, 0); /* drop a stale signal */
++        esp_lcd_panel_draw_bitmap(s_panel, 0, 0, LCD_W, LCD_H, px);
++        /* One frame is ~26 ms at 16 MHz; don't hang the UI if the signal is lost. */
++        xSemaphoreTake(s_frame_done, pdMS_TO_TICKS(60));
++    }
 +    lv_display_flush_ready(disp);
 +}
 +
@@ -257,16 +292,17 @@ index 0000000..c7a9f7d
 +    ESP_RETURN_ON_ERROR(panel_start(), TAG, "panel");
 +    ESP_RETURN_ON_ERROR(touch_start(), TAG, "touch");
 +
-+    void *fb = NULL;
-+    ESP_RETURN_ON_ERROR(esp_lcd_rgb_panel_get_frame_buffer(s_panel, 1, &fb), TAG, "frame buffer");
-+    ESP_RETURN_ON_FALSE(fb, ESP_ERR_NO_MEM, TAG, "no frame buffer");
++    void *fb = NULL, *fb2 = NULL;
++    ESP_RETURN_ON_ERROR(esp_lcd_rgb_panel_get_frame_buffer(s_panel, 2, &fb, &fb2), TAG, "frame buffers");
++    ESP_RETURN_ON_FALSE(fb && fb2, ESP_ERR_NO_MEM, TAG, "no frame buffers");
 +    memset(fb, 0, LCD_W * LCD_H * 2);
++    memset(fb2, 0, LCD_W * LCD_H * 2);
 +    lv_init();
 +    lv_tick_set_cb(tick_ms);
 +    s_disp = lv_display_create(LCD_W, LCD_H);
 +    ESP_RETURN_ON_FALSE(s_disp, ESP_ERR_NO_MEM, TAG, "LVGL display");
 +    lv_display_set_color_format(s_disp, LV_COLOR_FORMAT_RGB565);
-+    lv_display_set_buffers(s_disp, fb, NULL, LCD_W * LCD_H * 2, LV_DISPLAY_RENDER_MODE_DIRECT);
++    lv_display_set_buffers(s_disp, fb, fb2, LCD_W * LCD_H * 2, LV_DISPLAY_RENDER_MODE_DIRECT);
 +    lv_display_set_flush_cb(s_disp, flush);
 +    s_indev = lv_indev_create();
 +    ESP_RETURN_ON_FALSE(s_indev, ESP_ERR_NO_MEM, TAG, "LVGL touch");
