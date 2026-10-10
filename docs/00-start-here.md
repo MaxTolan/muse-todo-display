@@ -51,19 +51,20 @@ pushes. New item sources need no firmware change (see the `source` field in `04`
 - GPIO0 (BOOT) is an RGB data line on this board, so the BOOT button can't be read while the
   screen runs. Pairing is confirmed by touch, as on the SDK's LCD-7 port.
 
-## Current status (as of Oct 7, 2026)
+## Current status (as of Oct 9, 2026)
 
-- Hardware ordered Oct 2; the 5" board arrives ~Oct 13–15, 2026. Stand has arrived.
-- **Todo UI done on the simulator** (priority 3, ahead of hardware): model, screen, celebration
-  (issue #1) and an 800x480 simulator with scripted scenarios. Previews: `docs/previews/`.
-  Code layout and how to run it: "Repo layout" below and `sim/README.md`.
-- Not started: board port (needs the board), integration spike, firmware glue for the
-  commands/outbox (`04-agent-integration.md`). The model already implements the outbox logic;
-  the firmware only has to wire it to `muse_hatch_text_turn`, turn events and NVS.
-- Push direction (Muse → device) uses the SDK's documented custom-command mechanism.
-  Device → Muse uses typed chat turns. The one unverified piece is whether Muse will call a
-  device command on a schedule — that's the spike.
-- Open GitHub issues: #1 (completion celebration — built, see previews 10–12), #2 (task entry).
+- The board arrived Oct 9: the **800x480** variant (not the 5B).
+- **Board port done and running on the hardware** (`patches/muse-gadget-sdk/0001`): boot log
+  names the board, GT911 found at 0x5d, 800x480 UI up, no panics. Picture/touch/backlight
+  still need the owner's eyes and fingers.
+- **Todo screen running on the device** (`components/todo_display/todo_glue.c`): it's the home
+  screen; `todo.set_list` / `todo.show_message` are advertised to Muse; completions and task
+  requests go out as typed chat turns; state persists in NVS; clock from SNTP (Chicago).
+  Checked with an on-device screenshot (bench build).
+- **Not done yet: pairing** (needs the owner and the Muse app) and therefore the integration
+  spike (`04-agent-integration.md`): whether Muse calls `todo.set_list` on its own schedule.
+- Simulator, tests and previews: see "Repo layout" below.
+- All GitHub issues so far are closed.
 
 ## Repo layout
 
@@ -78,6 +79,11 @@ pushes. New item sources need no firmware change (see the `source` field in `04`
 - `sim/` — 800x480 SDL simulator (owner decision: our own sim, no SDK changes).
 - `tests/` — model unit tests (`test_todo_model.c`) and simulator scenario tests (`test_sim.py`).
 - `tools/sim.sh` — build / test / run / render previews.
+- `tools/fw.sh` — build / flash / monitor the firmware (see `05-open-questions-and-build.md`).
+- `patches/muse-gadget-sdk/` — our changes to the SDK, applied by `tools/fw.sh`: 0001 the 5" board
+  port, 0002 extra config overlays in `board.sh`, 0003 `muse_ext.h` (hooks for an app
+  component: screen on the face tile, commands, typed-turn results).
+- `firmware/sdkconfig.todo` — our build settings (todo component on, fonts, keyboard).
 
 The todo screen is the device's **main screen**; the SDK's avatar and settings screens stay for
 pairing and Wi-Fi setup (owner decision, Oct 7).

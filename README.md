@@ -8,7 +8,7 @@ short messages to the screen.
 
 ## Hardware
 
-- **Waveshare ESP32-S3 5" capacitive touch display** (800x480) — arrives ~Oct 13–15, 2026. Full spec, pin map, and quirks: `docs/01-hardware.md`.
+- **Waveshare ESP32-S3 5" capacitive touch display** (800x480) — arrived Oct 9, 2026. Full spec, pin map, and quirks: `docs/01-hardware.md`.
 - **Lamicall dock stand** (pink) — holds it upright on the desk.
 
 ## Documentation (start here if you're a coding agent)
@@ -24,11 +24,10 @@ short messages to the screen.
 
 ## Status
 
-Hardware ordered Oct 2, 2026; board arrives ~Oct 13–15. The todo UI runs on an 800x480
-desktop simulator (`tools/sim.sh run`) with unit and screenshot tests (`tools/sim.sh test`).
-Firmware glue and the board port come next. Both directions of the Muse link use documented
-SDK mechanisms (custom commands in, typed chat turns out); the remaining unknown is whether
-Muse calls device commands on a schedule — a small spike settles it.
+The board (800x480) arrived Oct 9 and runs the firmware: the 5" port and the todo screen as
+its home screen. Next: pair it with Muse (Muse app > Settings > Devices > Add Device) and run
+the integration spike. Build and flash with `tools/fw.sh flash`; the desktop simulator is
+`tools/sim.sh run`. Docs start at `docs/00-start-here.md`.
 
 ![Previews](docs/previews/contact-sheet.png)
 

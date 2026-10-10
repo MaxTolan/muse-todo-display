@@ -41,6 +41,15 @@
 
 ## Decided by the implementer (flag if you disagree)
 
+- **Before pairing, the todo screen shows** ("waiting for today's list" plus how to pair:
+  Muse app > Settings > Devices > Add Device > MuseGadget-XXXXXX). The SDK's own screens take
+  over only while pairing is in progress (app connected, or the tap-to-confirm prompt), and
+  settings stay one swipe to the left.
+- **Screen auto-sleep is turned off** once, on the first boot of this firmware (a desk display
+  should stay visible). It can be changed in the SDK's settings afterwards.
+- **Patch 0003 (`muse_ext.h`)** keeps all todo code in our component: the SDK only gains generic
+  hooks, so `main/` needs no todo-specific code and the SDK checkout builds other boards as before.
+
 - **The last list survives a reboot.** The device persists the list along with the outbox, so a
   power blip doesn't drop back to "waiting for today's list" (in keeping with "the device never
   clears the list on its own"). Items in their undo window at power loss come back open.
@@ -60,16 +69,30 @@
 
 # Build, flash, and iterate
 
-- Toolchain: ESP-IDF v6.0.1. Boards with the full UI build with `tools/muse/board.sh build <board>`
-  (this board: `lcd5`, once the port exists; the LCD-7 builds with `lcd7`).
-- The SDK's `esp32/AGENTS.md` is the authoritative build/flash reference — read it before
-  touching the build system. Each build keeps its `sdkconfig` in its build directory; delete it
-  after changing overlays.
-- UI iteration: `tools/sim.sh run` opens this repo's 800x480 simulator; `tools/sim.sh test`
-  runs the model and scenario tests; `tools/sim.sh previews` re-renders `docs/previews/`.
-  Details in `sim/README.md`.
-- Hardware iteration: once the board arrives, flash the board-support port first (acceptance
-  criteria in `02-board-support-port.md`), then the todo UI.
-- Before handing back work: board build passes with the size check, SDK host tests pass, and a
-  flashed board boots without panics.
+One-time setup (done on the owner's Mac, Oct 9):
+
+- ESP-IDF v6.0.1 in `~/esp/esp-idf-v6.0.1` (`./install.sh esp32s3`); `tools/fw.sh` finds it
+  there, or set `IDF_EXPORT=/path/to/export.sh`.
+- Your SDK token, one line, in `sdk_token.local` at the repo root (git-ignored). `tools/fw.sh`
+  passes it to the build privately and never prints it. (The SDK's boot banner does print it
+  on the serial console; don't paste console logs anywhere public.)
+
+Every time:
+
+```sh
+tools/fw.sh flash      # apply our SDK patches, build, flash over USB
+tools/fw.sh monitor    # serial console (Ctrl-] quits)
+tools/sim.sh test      # host tests: model, out-of-memory, simulator scenarios
+```
+
+- The board's USB-C is the ESP32-S3's own USB Serial/JTAG (`303a:1001`); the console is there too.
+- On-device screenshots: `MUSE_BENCH=1 tools/fw.sh flash`, then
+  `third_party/muse-gadget-sdk/esp32/tools/muse/snap.py /dev/cu.usbmodem101 "" out.png 8`
+  (with ESP-IDF's environment active). Flash the normal build again afterwards.
+- SDK host tests (`python3 -m unittest discover -s tests` in the SDK's `esp32/`) need
+  `managed_components/`, which `board.sh` deletes after each build: run `idf.py reconfigure`
+  first. All 181 pass with our patches (Oct 9). On macOS with the newest Command Line Tools,
+  set `SDKROOT` to `MacOSX26.5.sdk` (see `tools/sim.sh`).
+- A build keeps its `sdkconfig` in the build directory; after changing an overlay
+  (`firmware/sdkconfig.todo` or the SDK's), delete `build-muse-waveshare-s3-lcd5/sdkconfig`.
 - Commit small and working. `main` should always build.
