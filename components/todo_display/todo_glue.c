@@ -23,6 +23,8 @@
 #include "esp_log.h"
 #include "esp_netif_sntp.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "lvgl.h"
 #include "nvs.h"
 
@@ -386,9 +388,21 @@ static void update_hint(void)
     todo_ui_set_idle_hint(hint);
 }
 
+/* Log the LVGL task's deepest stack use so far, each time it grows by 1 KB. */
+static void watch_stack(void)
+{
+    static UBaseType_t low = UINT32_MAX;
+    UBaseType_t free_now = uxTaskGetStackHighWaterMark(NULL);
+    if (free_now + 1024 <= low || low == UINT32_MAX) {
+        low = free_now;
+        ESP_LOGI(TAG, "lvgl stack: %u bytes never used", (unsigned)free_now);
+    }
+}
+
 static void frame(lv_timer_t *t)
 {
     (void)t;
+    watch_stack();
     uint32_t now = now_ms();
     todo_model_tick(&s_model, now);
     bool visible = want_visible();

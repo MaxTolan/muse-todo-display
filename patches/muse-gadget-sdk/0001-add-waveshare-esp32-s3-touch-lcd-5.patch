@@ -35,10 +35,10 @@ index 0c18ced..4ddd58d 100644
      # The Muse tools' serial port: the console UART behind the board's USB
 diff --git a/esp32/components/muse/boards/board_waveshare_s3_lcd5.c b/esp32/components/muse/boards/board_waveshare_s3_lcd5.c
 new file mode 100644
-index 0000000..881b3ae
+index 0000000..81222be
 --- /dev/null
 +++ b/esp32/components/muse/boards/board_waveshare_s3_lcd5.c
-@@ -0,0 +1,364 @@
+@@ -0,0 +1,366 @@
 +/*
 + * Copyright (c) Meta Platforms, Inc. and affiliates.
 + * Licensed under the Apache License, Version 2.0.
@@ -334,7 +334,9 @@ index 0000000..881b3ae
 +    s_lv_lock = xSemaphoreCreateRecursiveMutex();
 +    s_started = xSemaphoreCreateBinary();
 +    if (!s_lv_lock || !s_started ||
-+        xTaskCreatePinnedToCoreWithCaps(lvgl_task, "lvgl", 8192, NULL, MUSE_UI_PRIORITY,
++        /* 32 KB, in PSRAM: an app screen on top of the SDK's UI (the todo
++         * display's list) overflowed the LCD-7's 8 KB. */
++        xTaskCreatePinnedToCoreWithCaps(lvgl_task, "lvgl", 32768, NULL, MUSE_UI_PRIORITY,
 +                                        NULL, MUSE_UI_CORE, MUSE_BIG_CAPS) != pdPASS) {
 +        return NULL;
 +    }
