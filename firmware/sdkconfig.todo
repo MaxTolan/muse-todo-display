@@ -1,7 +1,7 @@
 # Todo display settings, loaded after the SDK's overlays for the 5" board
 # (tools/fw.sh passes it to board.sh with MUSE_EXTRA_DEFAULTS).
 
-# todo.* commands for Muse (patches/muse-gadget-sdk/0003-*).
+# The todo screen and todo.* commands (components/todo_display).
 CONFIG_TODO_DISPLAY=y
 
 # The todo screen's type sizes, on top of the SDK's 14/16/20/28

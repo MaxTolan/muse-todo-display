@@ -24,6 +24,12 @@ void todo_ui_create(lv_obj_t *parent, todo_model_t *model);
 /* Redraw for the model's current state. Call every frame after todo_model_tick(). */
 void todo_ui_update(uint32_t now_ms);
 
+/*
+ * The line under "waiting for today's list" (e.g. how to pair). NULL or ""
+ * restores the default, "Muse will send it over soon."
+ */
+void todo_ui_set_idle_hint(const char *hint);
+
 /* Have the little top-hat Muse peek in from the top bar for a few seconds. */
 void todo_ui_peek(uint32_t now_ms);
 

@@ -1,0 +1,12 @@
+menu "Muse todo display"
+
+    config TODO_DISPLAY
+        bool "Todo display screen and todo.* commands"
+        depends on MUSE_ENABLED
+        default n
+        help
+            The desk todo display (github.com/MaxTolan/muse-todo-display):
+            replaces the avatar with the todo screen once paired, and adds
+            the todo.set_list and todo.show_message commands for Muse.
+
+endmenu

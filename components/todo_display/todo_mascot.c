@@ -14,6 +14,13 @@
 
 #include "muse_pixel.h"
 
+#ifdef ESP_PLATFORM
+#include "esp_attr.h"
+#define TODO_EXT_BSS EXT_RAM_BSS_ATTR
+#else
+#define TODO_EXT_BSS
+#endif
+
 /* RGB565 of the avatar's fixed outline colour (0x3a2b22), used to find the top of the head. */
 #define OUTLINE_565 0x3944u
 
@@ -136,7 +143,7 @@ lv_obj_t *todo_mascot_create(lv_obj_t *parent, int px)
 /* Top of the head and its centre, in avatar pixels, from a 1:1 copy of the frame. */
 static void find_head(int *top, int *cx)
 {
-    static uint16_t grid[MUSE_PX_W * MUSE_PX_H];
+    static TODO_EXT_BSS uint16_t grid[MUSE_PX_W * MUSE_PX_H];
     muse_pixel_set_size(MUSE_PX_W);
     muse_pixel_scale(grid, MUSE_PX_W, 0, MUSE_PX_W - 1, 0, MUSE_PX_H - 1);
     for (int y = 0; y < MUSE_PX_H; y++) {

@@ -13,6 +13,13 @@
 
 #include "todo_mascot.h"
 
+#ifdef ESP_PLATFORM
+#include "esp_attr.h"
+#define TODO_EXT_BSS EXT_RAM_BSS_ATTR /* ~25 KB of row state: PSRAM, not internal RAM */
+#else
+#define TODO_EXT_BSS
+#endif
+
 #define SCREEN_W 800
 #define SCREEN_H 480
 
@@ -71,7 +78,7 @@ typedef struct {
     int32_t leave_h;
 } row_t;
 
-static struct {
+static TODO_EXT_BSS struct {
     todo_model_t *model;
     uint32_t now;
     uint32_t seq;
@@ -96,6 +103,7 @@ static struct {
     lv_obj_t *idle_muse;
     lv_obj_t *idle_time;
     lv_obj_t *idle_date;
+    lv_obj_t *idle_sub;
 
     lv_obj_t *done;
     lv_obj_t *done_muse;
@@ -654,8 +662,10 @@ static void build_idle(lv_obj_t *parent)
     lv_obj_set_size(gap, 1, 18);
     lv_obj_t *wait = text(col_box, &lv_font_montserrat_32, C_PINK);
     lv_label_set_text(wait, "waiting for\ntoday's list");
-    lv_obj_t *sub = text(col_box, &lv_font_montserrat_20, C_MUTED);
-    lv_label_set_text(sub, "Muse will send it over soon.");
+    s.idle_sub = text(col_box, &lv_font_montserrat_20, C_MUTED);
+    lv_obj_set_width(s.idle_sub, 420);
+    lv_label_set_long_mode(s.idle_sub, LV_LABEL_LONG_MODE_WRAP);
+    lv_label_set_text(s.idle_sub, "Muse will send it over soon.");
 }
 
 static void build_done(void)
@@ -1144,6 +1154,11 @@ static void update_dancer(todo_screen_t screen, bool draw)
         };
         todo_mascot_draw(s.dancer, &pose);
     }
+}
+
+void todo_ui_set_idle_hint(const char *hint)
+{
+    set_text(s.idle_sub, hint && hint[0] ? hint : "Muse will send it over soon.");
 }
 
 void todo_ui_peek(uint32_t now_ms)

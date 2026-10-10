@@ -1,0 +1,241 @@
+diff --git a/esp32/cmake/project.cmake b/esp32/cmake/project.cmake
+index e394349..276f8e2 100644
+--- a/esp32/cmake/project.cmake
++++ b/esp32/cmake/project.cmake
+@@ -30,4 +30,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL GADGET_SOURCE_DIR)
+ endif()
+ 
+ # ESP-IDF reads version.txt from the active project root unless PROJECT_VER is set.
++# App components kept outside the SDK (e.g. MUSE_EXTRA_COMPONENT_DIRS=/path/to/components).
++if(DEFINED ENV{MUSE_EXTRA_COMPONENT_DIRS})
++    string(REPLACE ";" " " _muse_extra "$ENV{MUSE_EXTRA_COMPONENT_DIRS}")
++    separate_arguments(_muse_extra)
++    list(APPEND EXTRA_COMPONENT_DIRS ${_muse_extra})
++endif()
++
+ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+diff --git a/esp32/components/muse/CMakeLists.txt b/esp32/components/muse/CMakeLists.txt
+index a17a1b2..e5223b9 100644
+--- a/esp32/components/muse/CMakeLists.txt
++++ b/esp32/components/muse/CMakeLists.txt
+@@ -24,6 +24,7 @@ set(embed)
+ if(CONFIG_MUSE_ENABLED)
+     list(APPEND srcs
+         "muse_app.c"
++        "muse_ext.c"
+         "muse_board.c"
+         "muse_console.c"
+         "muse_state.c"
+diff --git a/esp32/components/muse/muse_chat_text.c b/esp32/components/muse/muse_chat_text.c
+index a79641d..3c3ca91 100644
+--- a/esp32/components/muse/muse_chat_text.c
++++ b/esp32/components/muse/muse_chat_text.c
+@@ -23,6 +23,7 @@
+ #include <stdio.h>
+ #include <string.h>
+ 
++#include "muse_ext.h"
+ #include "muse_state.h"
+ #include "muse_text.h"
+ 
+@@ -227,6 +228,10 @@ static size_t escape_some(const char **src, char *out, size_t cap)
+ /* Each line goes out in one write, so other tasks' log lines land between lines, not inside them. */
+ void muse_hatch_console(const char *type, const char *text, const char *fields, ...)
+ {
++    const muse_ext_t *ext = muse_ext();
++    if (ext && ext->chat_event) {
++        ext->chat_event(type, text);
++    }
+     static unsigned seq;
+     char line[CONSOLE_LINE];
+     do {
+diff --git a/esp32/components/muse/muse_ext.c b/esp32/components/muse/muse_ext.c
+new file mode 100644
+index 0000000..83d3b7a
+--- /dev/null
++++ b/esp32/components/muse/muse_ext.c
+@@ -0,0 +1,19 @@
++/*
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ * Licensed under the Apache License, Version 2.0.
++ */
++#include "muse_ext.h"
++
++#include <stddef.h>
++
++static const muse_ext_t *s_ext;
++
++void muse_ext_register(const muse_ext_t *ext)
++{
++    s_ext = ext;
++}
++
++const muse_ext_t *muse_ext(void)
++{
++    return s_ext;
++}
+diff --git a/esp32/components/muse/muse_ext.h b/esp32/components/muse/muse_ext.h
+new file mode 100644
+index 0000000..59672f0
+--- /dev/null
++++ b/esp32/components/muse/muse_ext.h
+@@ -0,0 +1,43 @@
++/*
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ * Licensed under the Apache License, Version 2.0.
++ *
++ * Extension points for an app component built alongside the SDK (for
++ * example a screen that replaces the avatar, with its own commands). The
++ * component registers once, before the UI starts (e.g. from a constructor
++ * in a WHOLE_ARCHIVE component); every hook is optional.
++ */
++#pragma once
++
++#include <stdbool.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++struct _lv_obj_t;
++struct cJSON;
++
++typedef struct {
++    /* After the SDK builds its UI, display lock held: add objects to the
++     * face tile (full screen, under the SDK's overlays). */
++    void (*ui_build)(struct _lv_obj_t *face);
++    /* Each UI frame, display lock held: true while the extension's own
++     * screen covers the avatar, so the SDK stops drawing it. */
++    bool (*ui_covers_face)(void);
++    /* Add commands to link.register: add(commands, ...) as noise_control does. */
++    void (*register_commands)(struct cJSON *commands);
++    /* Handle a link.invoke on the Noise task: a result, or NULL if not ours. */
++    struct cJSON *(*command)(const char *name, struct cJSON *params);
++    /* Every "@chat" line a typed turn reports (muse_hatch_console), from
++     * whichever task reports it: type, then the text (NULL if none). */
++    void (*chat_event)(const char *type, const char *text);
++} muse_ext_t;
++
++void muse_ext_register(const muse_ext_t *ext);
++/* The registered extension, or NULL. */
++const muse_ext_t *muse_ext(void);
++
++#ifdef __cplusplus
++}
++#endif
+diff --git a/esp32/components/muse/muse_ui.c b/esp32/components/muse/muse_ui.c
+index 781c63c..d8ec615 100644
+--- a/esp32/components/muse/muse_ui.c
++++ b/esp32/components/muse/muse_ui.c
+@@ -41,6 +41,7 @@
+ #include "muse_pixel.h"
+ #include "muse_settings.h"
+ #include "muse_settings_ui.h"
++#include "muse_ext.h"
+ #include "muse_state.h"
+ #include "muse_text.h"
+ #include "muse_wifi.h"
+@@ -1507,6 +1508,10 @@ static void frame_tick(lv_timer_t *timer)
+          * slide gets the whole frame time. */
+         return;
+     }
++    const muse_ext_t *ext = muse_ext();
++    if (ext && ext->ui_covers_face && ext->ui_covers_face()) {
++        return;   /* an extension's screen covers the face */
++    }
+ 
+     /* Fast attack, slow release keeps the mouth and meter lively but readable. */
+     float level = muse_state_level();
+@@ -1571,6 +1576,10 @@ esp_err_t muse_ui_start(void)
+     } else {
+         muse_menu_build(lv_screen_active(), s_w, s_h);
+     }
++    const muse_ext_t *ext = muse_ext();
++    if (ext && ext->ui_build) {
++        ext->ui_build(s_face ? s_face : lv_screen_active());
++    }
+     build_overlays();
+     lv_timer_create(frame_tick, muse_board->frame_ms, NULL);
+     s_ready = true;
+diff --git a/esp32/main/app.c b/esp32/main/app.c
+index 2cfb86a..96af0bd 100644
+--- a/esp32/main/app.c
++++ b/esp32/main/app.c
+@@ -72,6 +72,7 @@
+ #include "boards/watcher_camera.h"
+ #endif
+ #if CONFIG_MUSE_ENABLED
++#include "muse_ext.h"
+ #include "muse_glue.h"
+ // Muse joins Wi-Fi from its own settings, before or without pairing.
+ #define WIFI_WITHOUT_PAIRING 1
+@@ -1895,6 +1896,16 @@ static cJSON *on_ws_command(
+         return voice_configure_command(params);
+     }
+ #endif
++#if CONFIG_MUSE_ENABLED
++    /* Commands from an app component (muse_ext.h). */
++    const muse_ext_t *ext = muse_ext();
++    if (ext && ext->command) {
++        cJSON *ext_result = ext->command(command, params);
++        if (ext_result) {
++            return ext_result;
++        }
++    }
++#endif
+ #if CONFIG_HOMEHUB_SENSECAP_SENSORS
+     if (strcmp(command, "sensors.read") == 0) {
+         return sensecap_sensors_command();
+diff --git a/esp32/main/noise_control.cpp b/esp32/main/noise_control.cpp
+index 2ba3e31..ae3e9c9 100644
+--- a/esp32/main/noise_control.cpp
++++ b/esp32/main/noise_control.cpp
+@@ -43,6 +43,7 @@ extern "C" {
+ #include "ota.h"
+ #if CONFIG_MUSE_ENABLED
+ extern "C" {
++#include "muse_ext.h"
+ #include "muse_state.h"
+ }
+ #endif
+@@ -1368,6 +1369,16 @@ static char *build_register_json(void) {
+                 nullptr, volume_optional);
+ #endif
+ 
++#if CONFIG_MUSE_ENABLED
++    {
++        /* Commands from an app component (muse_ext.h). */
++        const muse_ext_t *ext = muse_ext();
++        if (ext && ext->register_commands) {
++            ext->register_commands(commands);
++        }
++    }
++#endif
++
+ #if CONFIG_HOMEHUB_SENSECAP_SENSORS
+     add_command(commands, "sensors.read",
+                 "Read the air sensors: CO2 in ppm, the tVOC index (1-500, 100 "
+diff --git a/esp32/tests/test_muse_caption_wrap.py b/esp32/tests/test_muse_caption_wrap.py
+index 37b4edf..0f80518 100644
+--- a/esp32/tests/test_muse_caption_wrap.py
++++ b/esp32/tests/test_muse_caption_wrap.py
+@@ -54,6 +54,7 @@ class CaptionWrapTest(unittest.TestCase):
+                 str(ROOT / "components" / "muse"),
+                 str(ROOT / "tests" / "muse_serial_chat_harness.c"),
+                 str(ROOT / "components" / "muse" / "muse_chat_text.c"),
++                str(ROOT / "components" / "muse" / "muse_ext.c"),
+                 str(ROOT / "components" / "muse" / "muse_text.c"),
+                 "-o",
+                 str(cls.binary),
+diff --git a/esp32/tests/test_muse_serial_chat.py b/esp32/tests/test_muse_serial_chat.py
+index 474a187..96e8d80 100644
+--- a/esp32/tests/test_muse_serial_chat.py
++++ b/esp32/tests/test_muse_serial_chat.py
+@@ -69,6 +69,7 @@ class HarnessTest(unittest.TestCase):
+                 str(ROOT / "components" / "muse"),
+                 str(ROOT / "tests" / "muse_serial_chat_harness.c"),
+                 str(ROOT / "components" / "muse" / "muse_chat_text.c"),
++                str(ROOT / "components" / "muse" / "muse_ext.c"),
+                 str(ROOT / "components" / "muse" / "muse_text.c"),
+                 "-o",
+                 str(cls.binary),
