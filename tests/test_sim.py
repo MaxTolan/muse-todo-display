@@ -16,9 +16,9 @@ import tempfile
 TIMEOUT = float(os.environ.get("TODO_SIM_TIMEOUT", "120"))
 
 
-def run(binary, scenario, out_dir):
+def run(binary, scenario, out_dir, *extra):
     proc = subprocess.run(
-        [binary, "--headless", "--scenario", str(scenario), "--out", str(out_dir)],
+        [binary, "--headless", *extra, "--scenario", str(scenario), "--out", str(out_dir)],
         capture_output=True,
         text=True,
         timeout=TIMEOUT,
@@ -44,6 +44,10 @@ def main():
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             first = run(args.binary, scenario, pathlib.Path(a))
             second = run(args.binary, scenario, pathlib.Path(b))
+        # Again the way the firmware hosts the screen (inside the SDK's tileview):
+        # every expectation must hold there too.
+        with tempfile.TemporaryDirectory() as c:
+            run(args.binary, scenario, pathlib.Path(c), "--sdk-layout")
         if first != second:
             diff = sorted(k for k in first if first.get(k) != second.get(k))
             raise SystemExit(f"FAIL {scenario.name}: screenshots differ between runs: {diff}")

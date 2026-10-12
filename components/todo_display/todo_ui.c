@@ -1056,6 +1056,11 @@ void todo_ui_create(lv_obj_t *parent, todo_model_t *model)
     lv_obj_set_size(s.list, lv_pct(100), lv_pct(100));
     lv_obj_add_flag(s.list, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(s.list, LV_DIR_VER);
+    /* A press anywhere in the list must land on it, so it can scroll: in the
+     * gaps between rows, on the "Ongoing" header, or on the empty space below
+     * the last row. Otherwise LVGL hit-tests past the list to the screen
+     * behind it and the drag scrolls nothing (seen on the device). */
+    lv_obj_add_flag(s.list, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_scrollbar_mode(s.list, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_flex_flow(s.list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_hor(s.list, 24, 0);
@@ -1328,6 +1333,49 @@ void todo_ui_update(uint32_t now_ms)
     update_peek(draw && screen != TODO_SCREEN_IDLE);
     update_bar(draw);
     update_dancer(screen, draw);
+}
+
+bool todo_ui_fully_visible(const char *target)
+{
+    lv_obj_t *o = NULL;
+    if (!strncmp(target, "row:", 4)) {
+        row_t *r = row_find(target + 4);
+        o = r ? r->row : NULL;
+    }
+    if (!o || lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN) || lv_obj_has_flag(s.list, LV_OBJ_FLAG_HIDDEN)) {
+        return false;
+    }
+    lv_obj_update_layout(s.list);
+    lv_area_t row, view;
+    lv_obj_get_coords(o, &row);
+    lv_obj_get_coords(s.list, &view);
+    /* Not under the message bar either. */
+    if (s.bar_on) {
+        lv_area_t bar;
+        lv_obj_get_coords(s.bar, &bar);
+        if (bar.y1 < view.y2) {
+            view.y2 = bar.y1 - 1;
+        }
+    }
+    return row.y1 >= view.y1 && row.y2 <= view.y2;
+}
+
+void todo_ui_scroll_info(char *out, size_t len)
+{
+    lv_area_t a;
+    lv_obj_get_coords(s.list, &a);
+    int rows = 0;
+    for (size_t i = 0; i < TODO_MAX_ITEMS; i++) {
+        rows += s.rows[i].used && !lv_obj_has_flag(s.rows[i].row, LV_OBJ_FLAG_HIDDEN);
+    }
+    snprintf(out, len, "list y=%d..%d h=%d scroll=%d left_below=%d rows=%d bar=%d hidden=%d",
+             (int)a.y1, (int)a.y2, (int)lv_obj_get_height(s.list), (int)lv_obj_get_scroll_y(s.list),
+             (int)lv_obj_get_scroll_bottom(s.list), rows, s.bar_on, lv_obj_has_flag(s.list, LV_OBJ_FLAG_HIDDEN));
+}
+
+int32_t todo_ui_list_scroll_y(void)
+{
+    return lv_obj_get_scroll_y(s.list);
 }
 
 bool todo_ui_point_for(const char *target, lv_point_t *pt)

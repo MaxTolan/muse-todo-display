@@ -1,0 +1,55 @@
+# The list scrolls under a finger wherever the drag starts, all the way down
+# to the last ongoing task and back. On the device, drags that began in the
+# gap between rows, on the "Ongoing" header or below the last row used to do
+# nothing (they hit-tested past the list).
+clock=2026-10-12 09:00
+list_date=Monday, October 12
+set_list_file=day.json
+set_ongoing=[{"id":"vpop-agent","label":"Build the VPOP survey-question agent","source":"manual"},{"id":"coreml-russ","label":"Train the CoreML models","source":"manual"},{"id":"swift","label":"Learn Swift concurrency","source":"manual"}]
+advance=500
+info=1
+
+# Start in the 12 px gap between the first two rows (y 168..179).
+drag=400,174,400,40
+advance=800
+expect_scrolled=100
+
+# Down to the bottom.
+drag=400,380,400,100
+advance=800
+drag=400,380,400,100
+advance=800
+drag=400,380,400,100
+advance=1500
+expect_visible=row:swift
+screenshot=30-scrolled-to-bottom.png
+
+# Back up, starting on the "Ongoing" header (y 168..199 when scrolled to the bottom).
+drag=400,184,400,470
+advance=1500
+expect_scrolled_max=600
+drag=400,200,400,470
+advance=800
+drag=400,200,400,470
+advance=800
+drag=400,200,400,470
+advance=1500
+expect_visible=row:rosary@2026-10-07
+
+# Taps on rows still tick them off (the list being clickable doesn't steal them).
+tap=row:rosary@2026-10-07
+expect_state=rosary@2026-10-07 undo
+
+# With a message showing at the bottom, the last task still comes into view.
+message=Remember the PT exercises before dinner, and drink some water.
+advance=800
+drag=400,360,400,100
+advance=800
+drag=400,360,400,100
+advance=800
+drag=400,360,400,100
+advance=800
+drag=400,360,400,100
+advance=1500
+expect_visible=row:swift
+screenshot=31-scrolled-to-bottom-with-message.png

@@ -34,6 +34,10 @@ Keys in the window:
 | P | Save `todo-sim.png` |
 | Esc | Quit |
 
+`--sdk-layout` hosts the screen the way the firmware does: on the face tile of a tileview with a
+settings tile beside it (the SDK's `muse_ui.c`). `tests/test_sim.py` runs every scenario in
+both layouts.
+
 `--state FILE` saves the persisted state (list and outbox) there and restores it on the next
 start, like NVS across a reboot.
 
@@ -53,6 +57,10 @@ clock (fixed to 2026-10-07 09:14 America/Chicago unless `clock=` sets it).
 | `message` | `todo.show_message` text |
 | `tap` | `row:<id>`, `undo:<id>`, `message`, `add`, `sheet_add`, `sheet_cancel`, `sheet_ongoing` (a real touch at that spot) |
 | `tap_at` | `x,y`: a touch at exact screen coordinates |
+| `drag` | `x1,y1,x2,y2`: a finger drag over ~300 ms (scrolling) |
+| `expect_scrolled`, `expect_scrolled_max` | The list is scrolled down at least / at most N px |
+| `expect_visible` | `row:<id>` lies fully inside the list's visible area, clear of the message bar |
+| `info` | Print the list's geometry and scroll state |
 | `type` | Type text on the add-task keyboard, key by key (letters, digits, common punctuation) |
 | `key` | Press one keyboard key: a label, or `backspace`, `ok`, `enter`, `close` |
 | `expect_sheet` | `open` / `closed`: the add-task sheet |

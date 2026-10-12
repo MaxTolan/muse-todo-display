@@ -31,6 +31,9 @@
 
 /* ---- simulated platform -------------------------------------------------- */
 
+/* The SDK-style tileview pieces when run with --sdk-layout (see ui_parent()). */
+static lv_obj_t *s_tv, *s_face, *s_root;
+
 static struct {
     uint32_t now_ms;
     time_t wall_base;
@@ -243,6 +246,20 @@ static void tap_point(lv_point_t pt, bool real_time)
     run_for(40, real_time);
 }
 
+/* A finger drag from (x1,y1) to (x2,y2) over ~300 ms, like a scroll. */
+static void drag(int x1, int y1, int x2, int y2, bool real_time)
+{
+    g.touch_pt = (lv_point_t){ x1, y1 };
+    g.touch_down = true;
+    run_for(40, real_time);
+    for (int i = 1; i <= 15; i++) {
+        g.touch_pt = (lv_point_t){ x1 + (x2 - x1) * i / 15, y1 + (y2 - y1) * i / 15 };
+        run_for(20, real_time);
+    }
+    g.touch_down = false;
+    run_for(40, real_time);
+}
+
 static void tap(const char *target, bool real_time)
 {
     lv_point_t pt;
@@ -295,6 +312,45 @@ static bool type_text(const char *text, bool real_time)
     return true;
 }
 
+/*
+ * --sdk-layout: host the screen the way the firmware does (todo_glue.c inside
+ * the SDK's muse_ui.c): a tileview with the face tile (our screen) and a
+ * settings tile one swipe to the left. Bugs in how our list scrolls inside
+ * that tileview only show up here.
+ */
+static bool s_sdk_layout;
+
+static lv_obj_t *ui_parent(void)
+{
+    lv_obj_t *scr = lv_screen_active();
+    if (!s_sdk_layout) {
+        return scr;
+    }
+    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+    lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *tv = s_tv = lv_tileview_create(scr);
+    lv_obj_set_style_bg_color(tv, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(tv, LV_OPA_COVER, 0);
+    lv_obj_set_scrollbar_mode(tv, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_t *face = s_face = lv_tileview_add_tile(tv, 0, 0, LV_DIR_RIGHT);
+    lv_obj_set_scrollbar_mode(face, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_bg_color(face, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(face, LV_OPA_COVER, 0);
+    lv_obj_t *settings = lv_tileview_add_tile(tv, 1, 0, LV_DIR_LEFT);
+    lv_obj_t *menu = lv_list_create(settings);
+    lv_obj_set_size(menu, lv_pct(100), lv_pct(100));
+    for (int i = 0; i < 20; i++) {
+        lv_list_add_text(menu, "setting");
+    }
+    /* What todo_glue.c's ui_build() puts on the face tile. */
+    lv_obj_t *root = s_root = lv_obj_create(face);
+    lv_obj_remove_style_all(root);
+    lv_obj_set_size(root, lv_pct(100), lv_pct(100));
+    lv_obj_remove_flag(root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
+    return root;
+}
+
 static void reboot(void)
 {
     printf("[%7u] reboot\n", g.now_ms);
@@ -308,7 +364,7 @@ static void reboot(void)
         todo_model_restore(&g.model, blob, g.now_ms);
         free(blob);
     }
-    todo_ui_create(lv_screen_active(), &g.model);
+    todo_ui_create(ui_parent(), &g.model);
 }
 
 /* "2026-10-07 09:14" in America/Chicago. */
@@ -507,6 +563,39 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
             lv_point_t pt;
             bool open = todo_ui_point_for("sheet_add", &pt);
             check(open == !strcmp(v, "open"), line_no, v, open ? "open" : "closed");
+        } else if (!strcmp(k, "drag")) {
+            int x1, y1, x2, y2;
+            ok = sscanf(v, "%d,%d,%d,%d", &x1, &y1, &x2, &y2) == 4;
+            if (ok) {
+                drag(x1, y1, x2, y2, real_time);
+            }
+        } else if (!strcmp(k, "info")) {
+            char info[200];
+            todo_ui_scroll_info(info, sizeof(info));
+            printf("[%7u] %s\n", g.now_ms, info);
+            if (s_tv) {
+                lv_area_t a;
+                lv_obj_get_coords(s_root, &a);
+                printf("          tv scroll=%d,%d face scroll=%d,%d root y=%d..%d\n",
+                       (int)lv_obj_get_scroll_x(s_tv), (int)lv_obj_get_scroll_y(s_tv),
+                       (int)lv_obj_get_scroll_x(s_face), (int)lv_obj_get_scroll_y(s_face), (int)a.y1, (int)a.y2);
+            }
+        } else if (!strcmp(k, "expect_visible")) {
+            /* expect_visible=row:<id>: that row lies fully inside the list's visible area */
+            check(todo_ui_fully_visible(v), line_no, v, "cut off or off screen");
+        } else if (!strcmp(k, "expect_scrolled_max")) {
+            /* expect_scrolled_max=<px>: the list is scrolled down no further than that */
+            int32_t y = todo_ui_list_scroll_y();
+            char got[32];
+            snprintf(got, sizeof(got), "%d px", (int)y);
+            check(y <= (int32_t)strtol(v, NULL, 10), line_no, v, got);
+        } else if (!strcmp(k, "expect_scrolled")) {
+            /* expect_scrolled=<min px>: the list has scrolled down at least that far */
+            int32_t y = todo_ui_list_scroll_y();
+            char got[32];
+            snprintf(got, sizeof(got), "%d px", (int)y);
+            check(y >= (int32_t)strtol(v, NULL, 10), line_no, v, got);
+            printf("[%7u] list scrolled %s\n", g.now_ms, got);
         } else if (!strcmp(k, "tap_at")) {
             int x, y;
             ok = sscanf(v, "%d,%d", &x, &y) == 2;
@@ -671,6 +760,8 @@ int main(int argc, char **argv)
             shot = argv[++i];
         } else if (!strcmp(argv[i], "--run-ms") && i + 1 < argc) {
             run_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
+        } else if (!strcmp(argv[i], "--sdk-layout")) {
+            s_sdk_layout = true;
         } else if (!strcmp(argv[i], "--state") && i + 1 < argc) {
             g.state_path = argv[++i];
         } else {
@@ -725,7 +816,7 @@ int main(int argc, char **argv)
             free(blob);
         }
     }
-    todo_ui_create(lv_screen_active(), &g.model);
+    todo_ui_create(ui_parent(), &g.model);
     SDL_AddEventWatch(event_watch, NULL);
 
     bool ok = true;

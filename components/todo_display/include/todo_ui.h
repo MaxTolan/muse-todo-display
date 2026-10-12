@@ -47,6 +47,15 @@ bool todo_ui_point_for(const char *target, lv_point_t *pt);
  */
 bool todo_ui_type(const char *key);
 
+/* "row:<id>" lies fully inside the list's visible area, clear of the message bar (for tests). */
+bool todo_ui_fully_visible(const char *target);
+
+/* One line describing the list's size and scroll state (for device logs). */
+void todo_ui_scroll_info(char *out, size_t len);
+
+/* How far the list is scrolled down, in pixels (for tests). */
+int32_t todo_ui_list_scroll_y(void);
+
 #ifdef __cplusplus
 }
 #endif
