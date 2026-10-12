@@ -1,0 +1,51 @@
+# Ongoing (multi-day) tasks, issue #8: their own section, untouched by daily pushes.
+clock=2026-10-12 08:30
+list_date=Monday, October 12
+set_list=[{"id":"rosary@2026-10-12","label":"Rosary","source":"manual"},{"id":"vit-am@2026-10-12","label":"Vitamins AM","source":"manual"},{"id":"steps@2026-10-12","label":"10,000 steps","source":"healthkit"}]
+set_ongoing=[{"id":"vpop-agent","label":"Build the VPOP survey-question agent","source":"manual"},{"id":"coreml-russ","label":"Train the CoreML models","source":"manual"}]
+advance=600
+screenshot=26-ongoing-section.png
+expect_screen=list
+
+# A daily push (Muse rebuilds the daily list constantly) leaves them alone.
+set_list=[{"id":"rosary@2026-10-12","label":"Rosary","source":"manual"},{"id":"vit-am@2026-10-12","label":"Vitamins AM","source":"manual","done":true},{"id":"steps@2026-10-12","label":"10,000 steps","source":"healthkit"}]
+advance=4000
+expect_state=vpop-agent open
+expect_state=coreml-russ open
+# An id belongs to one list.
+set_list_expect_error=[{"id":"vpop-agent","label":"X","source":"manual"}]
+
+# Ticking one off: butter accent, then reported in the format agreed on #8.
+auto_reply=Nice. I'll stop sending that one.
+tap=row:coreml-russ
+advance=1200
+screenshot=27-ongoing-undo.png
+advance=4000
+expect_turn=[todo-display] Completed (ongoing): Train the CoreML models (id coreml-russ).
+advance=2500
+expect_state=coreml-russ hidden
+set_ongoing=[{"id":"vpop-agent","label":"Build the VPOP survey-question agent","source":"manual"}]
+advance=300
+expect_state=coreml-russ gone
+
+# Finishing the day celebrates even with ongoing tasks open, then keeps them in view.
+auto_reply=All done for today!
+tap=row:rosary@2026-10-12
+tap=row:steps@2026-10-12
+advance=5200
+expect_screen=celebrate
+advance=2200
+expect_screen=all_done
+advance=2000
+screenshot=28-all-done-with-ongoing.png
+
+# Asking Muse for a new ongoing task from the device.
+auto_reply=Added it to your ongoing tasks.
+tap=add
+type=Learn Swift concurrency
+tap=sheet_ongoing
+advance=200
+screenshot=29-add-ongoing-toggle.png
+tap=sheet_add
+advance=200
+expect_turn=[todo-display] Add ongoing task: Learn Swift concurrency (request add-

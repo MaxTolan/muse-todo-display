@@ -94,12 +94,30 @@ marks them.
   comes back; completing those plays the celebration again.
 - A push that arrives with everything already done shows "all done" without the animation.
 
+## Ongoing tasks (issue #8)
+
+- Multi-day work (e.g. building an agent, training models) comes from `todo.set_ongoing`, not
+  the daily list, and shows in its own **Ongoing** section below the day's items: a butter-yellow
+  "Ongoing" header, slightly smaller rows, butter rings and checks instead of pink.
+- They behave like daily items: tappable if `manual` or `healthkit`, the same undo window, the
+  same send-to-Muse outbox (the line says "Completed (ongoing)"), the same dance, and they leave
+  when Muse replies.
+- They are not part of the day: "N of M done" counts only today's list, and finishing today's
+  list celebrates even if ongoing tasks are still open (owner, Oct 12). After the celebration,
+  if ongoing tasks remain, the list stays up with an "All done!" banner at the top and the
+  ongoing section below it, instead of the full all-done screen.
+- With no daily list yet but ongoing tasks present, the list shows (just the ongoing section)
+  instead of "waiting for today's list".
+- The dancer steps left of a visible Undo button rather than covering it.
+
 ## Adding a task (issue #2)
 
 - A pink **+** button sits at the top right on every screen (hidden during the celebration).
   Tapping it opens a full-screen "Add a task" sheet: a one-line text box (max 120 characters)
   and LVGL's on-screen keyboard, styled to the theme. The keyboard is hidden otherwise
   (owner's choice, Oct 9).
+- An **Ongoing task** toggle (off by default) asks Muse for an ongoing task instead of one for
+  today (owner, Oct 12).
 - **Add**, the keyboard's check key, or Enter sends it. An empty box shows "type a task first".
 - **Cancel** or the keyboard's close key closes the sheet and clears the text. Left alone for
   60 s, the sheet closes on its own but keeps the draft for next time.

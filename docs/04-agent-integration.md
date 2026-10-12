@@ -41,6 +41,22 @@ day (HealthKit completions, new reminders, edits).
   and lists over a sane cap (e.g. 40 items, 120-char labels). The SDK sets cJSON's nesting
   limit to 16; this shape is well under it.
 
+### `todo.set_ongoing` (issue #8)
+
+Replaces the **ongoing** (multi-day) tasks: work that takes days or weeks, shown in its own
+"Ongoing" section below the daily list. Chosen by Muse on issue #8 ("design A"): each command
+owns its list with plain replace semantics, so a daily `todo.set_list` can never touch ongoing
+tasks, and leaving a task out of `todo.set_ongoing` removes it.
+
+- Required `items` (string): the same JSON item format as `todo.set_list`
+  (`{id, label, source, done}`), at most 15 items.
+- `id`: **stable, no date** (e.g. `vpop-agent`), unlike daily items.
+- An id belongs to one list: sending a daily item's id here (or an ongoing id to `todo.set_list`)
+  is rejected.
+- Returns `{"ok": true, "payload": {"shown": N, "pending": [ids in the outbox]}}`, where `shown`
+  counts ongoing tasks on screen.
+- Ongoing tasks don't count toward "N of M done" or the all-done celebration (owner, Oct 12).
+
 ### `todo.show_message`
 
 Shows a short message in the message bar (see `03-ui-spec.md`) — reminders, encouragement,
@@ -83,13 +99,28 @@ per request (wall-clock seconds and a counter that survives reboots), so a resen
 [todo-display] Add task: Call the dentist about Tuesday at 3 (request add-1791559802-1).
 ```
 
+An ongoing task ticked off on the device (format agreed with Muse on issue #8; it means "stop
+sending this one", so it carries no time):
+
+```
+[todo-display] Completed (ongoing): Build the VPOP survey agent (id vpop-agent).
+```
+
+A task typed on the device with the "Ongoing task" toggle on asks for an ongoing task:
+
+```
+[todo-display] Add ongoing task: Learn Swift concurrency (request add-1791811823-1).
+```
+
 If several completions (or task requests) are waiting, send them in one turn, one line each.
 
 Muse needs a standing instruction (set up by the owner in Muse, not in firmware), roughly:
 *"Messages starting with [todo-display] are completions from my desk display. Record each
 item ID once and ignore IDs you've already recorded. If one says it was marked by hand before
 HealthKit caught up, count it as done now, and don't count it again when HealthKit syncs.
-"Add task" lines are new todos for today: add each request ID once, then push the updated list
+"Completed (ongoing)" means drop that id from your next todo.set_ongoing. "Add ongoing task"
+lines are new ongoing tasks (send them with todo.set_ongoing, stable ids). "Add task" lines are
+new todos for today: add each request ID once, then push the updated list
 to the display. Reply in one short sentence."*
 
 ### The outbox

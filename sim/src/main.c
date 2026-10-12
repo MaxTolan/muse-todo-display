@@ -459,8 +459,29 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
                 ok = false;
             } else {
                 char res[512];
-                todo_model_list_result(&g.model, res, sizeof(res));
+                todo_model_list_result(&g.model, false, res, sizeof(res));
                 printf("[%7u] todo.set_list -> %s\n", g.now_ms, res);
+            }
+            free(json);
+        } else if (!strcmp(k, "set_ongoing") || !strcmp(k, "set_ongoing_file")) {
+            char *json = NULL;
+            if (!strcmp(k, "set_ongoing_file")) {
+                char p[1024];
+                join_path(p, sizeof(p), base, v);
+                json = read_file(p);
+                if (!json) {
+                    fprintf(stderr, "%s:%d: cannot read %s\n", path, line_no, p);
+                    ok = false;
+                    break;
+                }
+            }
+            if (!todo_model_set_ongoing(&g.model, json ? json : v, g.now_ms, err, sizeof(err))) {
+                fprintf(stderr, "%s:%d: set_ongoing rejected: %s\n", path, line_no, err);
+                ok = false;
+            } else {
+                char res[512];
+                todo_model_list_result(&g.model, true, res, sizeof(res));
+                printf("[%7u] todo.set_ongoing -> %s\n", g.now_ms, res);
             }
             free(json);
         } else if (!strcmp(k, "set_list_expect_error")) {

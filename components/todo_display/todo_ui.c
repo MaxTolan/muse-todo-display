@@ -56,6 +56,7 @@
 
 typedef struct {
     bool used;
+    bool ongoing; /* a multi-day task: butter accent, its own section */
     char id[TODO_ID_MAX + 1];
     lv_obj_t *row;
     lv_obj_t *check;
@@ -124,6 +125,12 @@ static TODO_EXT_BSS struct {
     lv_obj_t *sheet_ta;
     lv_obj_t *sheet_kb;
     lv_obj_t *sheet_err;
+    lv_obj_t *sheet_ongoing;       /* "Ongoing task" toggle */
+    lv_obj_t *sheet_ongoing_label;
+    bool sheet_ongoing_on;
+    lv_obj_t *ongoing_hdr;         /* "Ongoing" section header in the list */
+    lv_obj_t *done_banner;         /* "All done!" atop the list when ongoing tasks remain */
+    lv_obj_t *done_banner_sub;
     lv_obj_t *sheet_add;
     lv_obj_t *sheet_cancel;
     bool sheet_open;
@@ -336,12 +343,13 @@ static row_t *row_create(const todo_item_t *it)
     r->used = true;
     r->shown_state = -1;
     snprintf(r->id, sizeof(r->id), "%s", it->id);
+    r->ongoing = it->ongoing; /* an id never changes list (todo_model.h) */
 
     lv_obj_t *row = box(s.list);
     r->row = row;
     lv_obj_set_width(row, lv_pct(100));
     lv_obj_set_height(row, LV_SIZE_CONTENT);
-    lv_obj_set_style_min_height(row, ROW_MIN_H, 0);
+    lv_obj_set_style_min_height(row, r->ongoing ? ROW_MIN_H - 12 : ROW_MIN_H, 0);
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(row, col(C_CARD), 0);
     lv_obj_set_style_bg_color(row, col(C_CARD_PRESSED), LV_STATE_PRESSED);
@@ -366,12 +374,13 @@ static row_t *row_create(const todo_item_t *it)
     lv_label_set_text(r->check_icon, LV_SYMBOL_OK);
     lv_obj_center(r->check_icon);
 
-    r->label = text(row, &lv_font_montserrat_28, C_CREAM);
+    const lv_font_t *font = r->ongoing ? &lv_font_montserrat_24 : &lv_font_montserrat_28;
+    r->label = text(row, font, C_CREAM);
     lv_obj_set_flex_grow(r->label, 1);
     lv_label_set_long_mode(r->label, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_height(r->label, LV_SIZE_CONTENT);
     /* Two lines at most; longer labels end in an ellipsis. */
-    lv_obj_set_style_max_height(r->label, 2 * lv_font_get_line_height(&lv_font_montserrat_28), 0);
+    lv_obj_set_style_max_height(r->label, 2 * lv_font_get_line_height(font), 0);
 
     r->side = box(row);
     lv_obj_set_size(r->side, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -406,14 +415,14 @@ static row_t *row_create(const todo_item_t *it)
     lv_obj_set_height(r->undo_bar, 6);
     lv_obj_align(r->undo_bar, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_obj_set_style_bg_opa(r->undo_bar, LV_OPA_50, 0);
-    lv_obj_set_style_bg_color(r->undo_bar, col(C_PINK), 0);
+    lv_obj_set_style_bg_color(r->undo_bar, col(r->ongoing ? C_BUTTER : C_PINK), 0);
 
     r->swoosh = box(row);
     lv_obj_add_flag(r->swoosh, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_set_height(r->swoosh, 6);
     lv_obj_set_style_radius(r->swoosh, 3, 0);
     lv_obj_set_style_bg_opa(r->swoosh, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(r->swoosh, col(C_PINK), 0);
+    lv_obj_set_style_bg_color(r->swoosh, col(r->ongoing ? C_BUTTER : C_PINK), 0);
     show(r->swoosh, false);
     return r;
 }
@@ -456,23 +465,24 @@ static void row_apply(row_t *r, const todo_item_t *it)
     }
     r->crossed = crossed;
 
-    uint32_t ring = C_PINK, fill = C_BG;
+    uint32_t accent = r->ongoing ? C_BUTTER : C_PINK;
+    uint32_t ring = accent, fill = C_BG;
     lv_opa_t fill_opa = LV_OPA_TRANSP;
     bool tick = false;
     switch (st) {
     case TODO_ROW_OPEN:
-        ring = it->tappable ? C_PINK : C_FAINT;
+        ring = it->tappable ? accent : C_FAINT;
         break;
     case TODO_ROW_UNDO:
-        fill = C_PINK;
+        fill = accent;
         fill_opa = LV_OPA_COVER;
         tick = true;
         break;
     case TODO_ROW_QUEUED:
     case TODO_ROW_SENDING:
-        fill = C_PINK;
+        fill = accent;
         fill_opa = LV_OPA_70;
-        ring = C_PINK;
+        ring = accent;
         tick = true;
         break;
     case TODO_ROW_AUTO_DONE:
@@ -534,7 +544,7 @@ static void row_animate(row_t *r, const todo_item_t *it)
     if (swoosh) {
         float t = since(r->cross_ms) / SWOOSH_MS;
         lv_point_t size;
-        const lv_font_t *font = &lv_font_montserrat_28;
+        const lv_font_t *font = lv_obj_get_style_text_font(r->label, LV_PART_MAIN);
         int32_t max_w = lv_obj_get_width(r->label);
         lv_text_get_size(&size, it->label, font, 0, 0, max_w, LV_TEXT_FLAG_NONE);
         int32_t w = size.x < max_w ? size.x : max_w;
@@ -562,7 +572,21 @@ static void row_animate(row_t *r, const todo_item_t *it)
     }
 }
 
-static void sync_rows(void)
+/* Place obj at *index in the list (only moving it if needed). */
+static void place(lv_obj_t *obj, uint32_t *index)
+{
+    if (lv_obj_get_index(obj) != (int32_t)*index) {
+        lv_obj_move_to_index(obj, (int32_t)*index);
+    }
+    (*index)++;
+}
+
+/*
+ * Rows in list order: [all-done banner] today's items, then the "Ongoing"
+ * header and the ongoing tasks. done_mode: the day is finished but ongoing
+ * tasks remain, so the banner shows and today's rows stay out of the way.
+ */
+static void sync_rows(bool done_mode)
 {
     const todo_model_t *m = s.model;
     /* Drop rows whose item is gone or hidden. */
@@ -576,25 +600,31 @@ static void sync_rows(void)
             row_delete(r);
         }
     }
-    /* Create, order and style the visible ones. */
     uint32_t index = 0;
-    for (size_t i = 0; i < m->count; i++) {
-        const todo_item_t *it = &m->items[i];
-        if (!todo_model_item_visible(it)) {
-            continue;
+    show(s.done_banner, done_mode);
+    place(s.done_banner, &index);
+    for (int pass = 0; pass < 2; pass++) {
+        bool ongoing = pass == 1;
+        if (ongoing) {
+            show(s.ongoing_hdr, todo_model_ongoing_visible(m) > 0);
+            place(s.ongoing_hdr, &index);
         }
-        row_t *r = row_find(it->id);
-        if (!r) {
-            r = row_create(it);
-            if (!r) {
+        for (size_t i = 0; i < m->count; i++) {
+            const todo_item_t *it = &m->items[i];
+            if (it->ongoing != ongoing || !todo_model_item_visible(it)) {
                 continue;
             }
+            row_t *r = row_find(it->id);
+            if (!r) {
+                r = row_create(it);
+                if (!r) {
+                    continue;
+                }
+            }
+            show(r->row, ongoing || !done_mode);
+            place(r->row, &index);
+            row_apply(r, it);
         }
-        if (lv_obj_get_index(r->row) != (int32_t)index) {
-            lv_obj_move_to_index(r->row, (int32_t)index);
-        }
-        index++;
-        row_apply(r, it);
     }
     lv_obj_update_layout(s.list);
     for (size_t i = 0; i < m->count; i++) {
@@ -604,6 +634,26 @@ static void sync_rows(void)
             row_animate(r, it);
         }
     }
+}
+
+static void build_list_extras(void)
+{
+    s.done_banner = box(s.list);
+    lv_obj_set_size(s.done_banner, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_ver(s.done_banner, 6, 0);
+    lv_obj_set_flex_flow(s.done_banner, LV_FLEX_FLOW_COLUMN);
+    lv_obj_t *title = text(s.done_banner, &lv_font_montserrat_40, C_BUTTER);
+    lv_label_set_text(title, "All done!");
+    s.done_banner_sub = text(s.done_banner, &lv_font_montserrat_20, C_CREAM);
+    show(s.done_banner, false);
+
+    s.ongoing_hdr = box(s.list);
+    lv_obj_set_size(s.ongoing_hdr, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_top(s.ongoing_hdr, 10, 0);
+    lv_obj_set_style_pad_left(s.ongoing_hdr, 6, 0);
+    lv_obj_t *h = text(s.ongoing_hdr, &lv_font_montserrat_20, C_BUTTER);
+    lv_label_set_text(h, "Ongoing");
+    show(s.ongoing_hdr, false);
 }
 
 /* ---- building ------------------------------------------------------------ */
@@ -769,10 +819,19 @@ static void build_bar(void)
 
 /* ---- add a task --------------------------------------------------------- */
 
+static void sheet_set_ongoing(bool on)
+{
+    s.sheet_ongoing_on = on;
+    lv_obj_set_style_bg_color(s.sheet_ongoing, col(on ? C_BUTTER : C_CARD), 0);
+    lv_obj_set_style_text_color(s.sheet_ongoing_label, col(on ? C_PLUM_TEXT : C_MUTED), 0);
+    set_text(s.sheet_ongoing_label, on ? LV_SYMBOL_OK "  Ongoing task" : "Ongoing task");
+}
+
 static void sheet_close(bool keep_draft)
 {
     if (!keep_draft) {
         lv_textarea_set_text(s.sheet_ta, "");
+        sheet_set_ongoing(false);
     }
     set_text(s.sheet_err, "");
     s.sheet_open = false;
@@ -782,7 +841,8 @@ static void sheet_close(bool keep_draft)
 static void sheet_submit(void)
 {
     char err[64] = "";
-    if (todo_model_add_task(s.model, lv_textarea_get_text(s.sheet_ta), s.now, err, sizeof(err))) {
+    if (todo_model_add_task(s.model, lv_textarea_get_text(s.sheet_ta), s.sheet_ongoing_on, s.now, err,
+                            sizeof(err))) {
         sheet_close(false);
     } else {
         set_text(s.sheet_err, err);
@@ -828,6 +888,14 @@ static void sheet_ta_ready(lv_event_t *e)
 {
     (void)e;
     sheet_submit();
+}
+
+/* Ask Muse for a multi-day task instead of one for today (issue #8). */
+static void sheet_ongoing_clicked(lv_event_t *e)
+{
+    (void)e;
+    s.sheet_ms = s.now;
+    sheet_set_ongoing(!s.sheet_ongoing_on);
 }
 
 static void sheet_typed(lv_event_t *e)
@@ -908,11 +976,23 @@ static void build_add(lv_obj_t *parent)
     lv_obj_add_state(s.sheet_ta, LV_STATE_FOCUSED); /* show the cursor */
     lv_obj_add_event_cb(s.sheet_ta, sheet_typed, LV_EVENT_VALUE_CHANGED, NULL);
 
+    s.sheet_ongoing = box(s.sheet);
+    lv_obj_set_size(s.sheet_ongoing, 200, 38);
+    lv_obj_set_pos(s.sheet_ongoing, SCREEN_W - 24 - 200, 164);
+    lv_obj_set_style_radius(s.sheet_ongoing, 19, 0);
+    lv_obj_set_style_bg_opa(s.sheet_ongoing, LV_OPA_COVER, 0);
+    lv_obj_set_ext_click_area(s.sheet_ongoing, 8);
+    lv_obj_add_flag(s.sheet_ongoing, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s.sheet_ongoing, sheet_ongoing_clicked, LV_EVENT_CLICKED, NULL);
+    s.sheet_ongoing_label = text(s.sheet_ongoing, &lv_font_montserrat_20, C_MUTED);
+    lv_obj_center(s.sheet_ongoing_label);
+    sheet_set_ongoing(false);
+
     s.sheet_err = text(s.sheet, &lv_font_montserrat_20, C_PEACH);
     lv_obj_set_pos(s.sheet_err, 32, 166);
 
     s.sheet_kb = lv_keyboard_create(s.sheet);
-    lv_obj_set_size(s.sheet_kb, SCREEN_W, 284);
+    lv_obj_set_size(s.sheet_kb, SCREEN_W, 276);
     lv_obj_align(s.sheet_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_keyboard_set_textarea(s.sheet_kb, s.sheet_ta);
     lv_obj_set_style_bg_color(s.sheet_kb, col(C_BG), 0);
@@ -982,6 +1062,7 @@ void todo_ui_create(lv_obj_t *parent, todo_model_t *model)
     lv_obj_set_style_pad_top(s.list, 4, 0);
     lv_obj_set_style_pad_bottom(s.list, 16, 0);
     lv_obj_set_style_pad_row(s.list, 12, 0);
+    build_list_extras();
 
     build_done();
     build_party();
@@ -1143,7 +1224,22 @@ static void update_dancer(todo_screen_t screen, bool draw)
     /* Where its feet rest: on the bar's top edge, or just below the screen edge. */
     int32_t floor_y = s.bar_on ? lv_obj_get_y(s.bar) + 22 : SCREEN_H + 6;
     int32_t visible = DANCER_PX + 2; /* hat to feet */
-    set_xy(s.dancer, SCREEN_W - DANCER_PX - 28, floor_y - (int32_t)lroundf((float)visible * up));
+    int32_t top = floor_y - visible;
+    /* Step left of any Undo button it would cover (the tapped row is often
+     * the bottom one, right where Muse pops up). */
+    int32_t x = SCREEN_W - DANCER_PX - 28;
+    for (size_t i = 0; i < TODO_MAX_ITEMS; i++) {
+        row_t *r = &s.rows[i];
+        if (!r->used || lv_obj_has_flag(r->undo, LV_OBJ_FLAG_HIDDEN) || lv_obj_has_flag(r->row, LV_OBJ_FLAG_HIDDEN)) {
+            continue;
+        }
+        lv_area_t a;
+        lv_obj_get_coords(r->undo, &a);
+        if (a.y2 >= top && a.y1 <= floor_y && a.x2 >= x && a.x1 <= x + DANCER_PX) {
+            x = a.x1 - DANCER_PX - 8;
+        }
+    }
+    set_xy(s.dancer, x, floor_y - (int32_t)lroundf((float)visible * up));
     if (draw) {
         float sec = t / 1000.0f;
         todo_mascot_pose_t pose = {
@@ -1181,9 +1277,11 @@ void todo_ui_update(uint32_t now_ms)
     }
 
     update_top(screen);
+    /* Day finished but ongoing tasks remain: keep them on screen under a banner. */
+    bool done_mode = screen == TODO_SCREEN_ALL_DONE && todo_model_ongoing_visible(s.model) > 0;
     show(s.idle, screen == TODO_SCREEN_IDLE);
-    show(s.list, screen == TODO_SCREEN_LIST);
-    show(s.done, screen == TODO_SCREEN_ALL_DONE);
+    show(s.list, screen == TODO_SCREEN_LIST || done_mode);
+    show(s.done, screen == TODO_SCREEN_ALL_DONE && !done_mode);
     show(s.party, screen == TODO_SCREEN_CELEBRATE);
     if (s.sheet_open && since(s.sheet_ms) >= SHEET_IDLE_MS) {
         sheet_close(true); /* walked away: hide it, keep what was typed */
@@ -1205,19 +1303,28 @@ void todo_ui_update(uint32_t now_ms)
         break;
     }
     case TODO_SCREEN_LIST:
-        sync_rows();
         break;
     case TODO_SCREEN_ALL_DONE:
-        update_done(draw);
+        if (done_mode) {
+            int done, total;
+            char buf[64];
+            todo_model_progress(s.model, &done, &total);
+            if (total) {
+                snprintf(buf, sizeof(buf), "%d of %d today. The ongoing ones can wait.", done, total);
+            } else {
+                snprintf(buf, sizeof(buf), "Nothing on today's list.");
+            }
+            set_text(s.done_banner_sub, buf);
+        } else {
+            update_done(draw);
+        }
         break;
     case TODO_SCREEN_CELEBRATE:
         update_party(draw);
         break;
     }
-    /* Keep rows in step even while hidden, so the list is right when it returns. */
-    if (screen != TODO_SCREEN_LIST) {
-        sync_rows();
-    }
+    /* Every frame, even while hidden, so the list is right when it returns. */
+    sync_rows(done_mode);
     update_peek(draw && screen != TODO_SCREEN_IDLE);
     update_bar(draw);
     update_dancer(screen, draw);
@@ -1238,6 +1345,8 @@ bool todo_ui_point_for(const char *target, lv_point_t *pt)
         o = s.sheet_open ? s.sheet_add : NULL;
     } else if (!strcmp(target, "sheet_cancel")) {
         o = s.sheet_open ? s.sheet_cancel : NULL;
+    } else if (!strcmp(target, "sheet_ongoing")) {
+        o = s.sheet_open ? s.sheet_ongoing : NULL;
     } else if (!strcmp(target, "message")) {
         o = s.bar;
     }

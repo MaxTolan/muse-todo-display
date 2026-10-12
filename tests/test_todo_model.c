@@ -548,22 +548,22 @@ static void test_add_task(void)
 {
     char err[64];
     setup("add_task/validation");
-    CHECK(!todo_model_add_task(&M, "", T, err, sizeof(err)));
-    CHECK(!todo_model_add_task(&M, "   ", T, err, sizeof(err)));
-    CHECK(!todo_model_add_task(&M, NULL, T, err, sizeof(err)));
+    CHECK(!todo_model_add_task(&M, "", false, T, err, sizeof(err)));
+    CHECK(!todo_model_add_task(&M, "   ", false, T, err, sizeof(err)));
+    CHECK(!todo_model_add_task(&M, NULL, false, T, err, sizeof(err)));
     char big[200];
     memset(big, 'x', sizeof(big) - 1);
     big[sizeof(big) - 1] = '\0';
-    CHECK(!todo_model_add_task(&M, big, T, err, sizeof(err)));
+    CHECK(!todo_model_add_task(&M, big, false, T, err, sizeof(err)));
     CHECK(M.add_count == 0);
     for (int i = 0; i < TODO_MAX_ADDS; i++) {
         F.online = false;
-        CHECK(todo_model_add_task(&M, "task", T, err, sizeof(err)));
+        CHECK(todo_model_add_task(&M, "task", false, T, err, sizeof(err)));
     }
-    CHECK(!todo_model_add_task(&M, "one too many", T, err, sizeof(err)));
+    CHECK(!todo_model_add_task(&M, "one too many", false, T, err, sizeof(err)));
 
     setup("add_task/send");
-    CHECK(todo_model_add_task(&M, "  Call the\ndentist  ", T, err, sizeof(err)));
+    CHECK(todo_model_add_task(&M, "  Call the\ndentist  ", false, T, err, sizeof(err)));
     CHECK_STR(M.adds[0].text, "Call the dentist"); /* trimmed and flattened */
     CHECK_STR(M.message, "Asking Muse to add \"Call the dentist\"");
     CHECK(strstr(F.saved, "Call the dentist") != NULL); /* persisted at once */
@@ -576,7 +576,7 @@ static void test_add_task(void)
     CHECK_STR(M.message, "Added to today's list.");
 
     /* IDs keep counting, so a second request is a different request. */
-    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    todo_model_add_task(&M, "Buy stamps", false, T, err, sizeof(err));
     run(40);
     CHECK(strstr(F.last_turn, "(request add-1791382440-2)") != NULL);
 
@@ -585,7 +585,7 @@ static void test_add_task(void)
     push(DAY);
     todo_model_tap(&M, "rosary@1007", T);
     run(TODO_UNDO_MS + 100);
-    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    todo_model_add_task(&M, "Buy stamps", false, T, err, sizeof(err));
     F.online = true;
     run(40);
     CHECK(F.sends == 1);
@@ -593,7 +593,7 @@ static void test_add_task(void)
                            "[todo-display] Add task: Buy stamps (request add-1791382440-1).");
 
     /* Typed while a turn is in flight: it waits for the next turn, not lost. */
-    todo_model_add_task(&M, "Water plants", T, err, sizeof(err));
+    todo_model_add_task(&M, "Water plants", false, T, err, sizeof(err));
     todo_model_turn_done(&M, T);
     CHECK(M.add_count == 1 && !strcmp(M.adds[0].text, "Water plants"));
     run(40);
@@ -601,7 +601,7 @@ static void test_add_task(void)
     CHECK(strstr(F.last_turn, "Water plants") && !strstr(F.last_turn, "Buy stamps"));
 
     setup("add_task/error_retry");
-    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    todo_model_add_task(&M, "Buy stamps", false, T, err, sizeof(err));
     run(40);
     todo_model_turn_error(&M, T);
     CHECK(M.add_count == 1 && !M.adds[0].sending);
@@ -609,7 +609,7 @@ static void test_add_task(void)
     CHECK(F.sends == 2);
 
     setup("add_task/give_up");
-    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    todo_model_add_task(&M, "Buy stamps", false, T, err, sizeof(err));
     run(40);
     todo_model_turn_error(&M, T);
     F.wall += TODO_GIVE_UP_S;
@@ -620,7 +620,7 @@ static void test_add_task(void)
 
     setup("add_task/reboot");
     F.online = false;
-    todo_model_add_task(&M, "Buy stamps", T, err, sizeof(err));
+    todo_model_add_task(&M, "Buy stamps", false, T, err, sizeof(err));
     char blob[4096];
     snprintf(blob, sizeof(blob), "%s", F.saved);
     CHECK(todo_model_restore(&M, blob, T));
@@ -630,8 +630,161 @@ static void test_add_task(void)
     run(40);
     CHECK(F.sends == 1);
     CHECK(strstr(F.last_turn, "Add task: Buy stamps (request add-1791382440-1)") != NULL);
-    todo_model_add_task(&M, "Next", T, err, sizeof(err));
+    todo_model_add_task(&M, "Next", false, T, err, sizeof(err));
     CHECK(strstr(M.adds[1].id, "-2") != NULL); /* numbering survives the reboot */
+}
+
+/* ---- ongoing tasks (issue #8) ---------------------------------------------- */
+
+static const char *ONGOING2 =
+    "[{\"id\":\"vpop-agent\",\"label\":\"Build the VPOP survey agent\",\"source\":\"manual\"},"
+    "{\"id\":\"coreml-russ\",\"label\":\"CoreML models\",\"source\":\"manual\"}]";
+
+static bool ongoing(const char *json)
+{
+    char err[96] = "";
+    bool ok = todo_model_set_ongoing(&M, json, T, err, sizeof(err));
+    if (!ok) {
+        fprintf(stderr, "  (set_ongoing: %s)\n", err);
+    }
+    return ok;
+}
+
+static void test_ongoing(void)
+{
+    int done, total;
+    char err[96];
+
+    setup("ongoing/mixed");
+    CHECK(push(DAY));
+    CHECK(ongoing(ONGOING2));
+    CHECK(M.count == 5);
+    CHECK(todo_model_find(&M, "vpop-agent")->ongoing);
+    CHECK(!todo_model_find(&M, "rosary@1007")->ongoing);
+    todo_model_progress(&M, &done, &total);
+    CHECK(done == 0 && total == 3); /* ongoing tasks don't count */
+    CHECK(todo_model_ongoing_visible(&M) == 2);
+    char out[256];
+    CHECK(todo_model_list_result(&M, true, out, sizeof(out)));
+    CHECK_STR(out, "{\"shown\":2,\"pending\":[]}");
+    CHECK(todo_model_list_result(&M, false, out, sizeof(out)));
+    CHECK_STR(out, "{\"shown\":3,\"pending\":[]}");
+
+    /* A daily-only push leaves the ongoing tasks alone, and vice versa. */
+    CHECK(push("[{\"id\":\"sun@1008\",\"label\":\"Sunlight\",\"source\":\"manual\"}]"));
+    CHECK(todo_model_find(&M, "vpop-agent") && todo_model_find(&M, "coreml-russ"));
+    CHECK(todo_model_find(&M, "rosary@1007") == NULL);
+    CHECK(ongoing("[{\"id\":\"vpop-agent\",\"label\":\"Build the VPOP survey agent\",\"source\":\"manual\"}]"));
+    CHECK(todo_model_find(&M, "coreml-russ") == NULL); /* left out = removed */
+    CHECK(todo_model_find(&M, "sun@1008") != NULL);
+    CHECK(ongoing("[]"));
+    CHECK(todo_model_ongoing_visible(&M) == 0 && todo_model_find(&M, "sun@1008"));
+
+    setup("ongoing/ids_belong_to_one_list");
+    push(DAY);
+    ongoing(ONGOING2);
+    CHECK(!todo_model_set_list(&M, "[{\"id\":\"vpop-agent\",\"label\":\"X\",\"source\":\"manual\"}]", NULL, T,
+                               err, sizeof(err)));
+    CHECK(strstr(err, "ongoing") != NULL);
+    CHECK(!todo_model_set_ongoing(&M, "[{\"id\":\"rosary@1007\",\"label\":\"X\",\"source\":\"manual\"}]", T,
+                                  err, sizeof(err)));
+    CHECK(strstr(err, "today") != NULL);
+    CHECK(M.count == 5); /* nothing changed */
+    CHECK(!todo_model_set_ongoing(&M, "{}", T, err, sizeof(err)));
+    CHECK(!todo_model_set_ongoing(&M, NULL, T, err, sizeof(err)));
+
+    setup("ongoing/cap");
+    char many[4096] = "[";
+    for (int i = 0; i < TODO_MAX_ONGOING + 1; i++) {
+        char one[96];
+        snprintf(one, sizeof(one), "%s{\"id\":\"o%d\",\"label\":\"L\",\"source\":\"manual\"}", i ? "," : "", i);
+        strcat(many, one);
+    }
+    strcat(many, "]");
+    CHECK(!todo_model_set_ongoing(&M, many, T, err, sizeof(err)));
+    CHECK(strstr(err, "15") != NULL);
+
+    setup("ongoing/complete");
+    push(DAY);
+    ongoing(ONGOING2);
+    CHECK(todo_model_tap(&M, "vpop-agent", T));
+    CHECK(M.dancing);
+    run(TODO_UNDO_MS + 100);
+    CHECK(F.sends == 1);
+    /* The format agreed with Muse on issue #8. */
+    CHECK_STR(F.last_turn, "[todo-display] Completed (ongoing): Build the VPOP survey agent (id vpop-agent).");
+    CHECK(todo_model_screen(&M) == TODO_SCREEN_LIST); /* no celebration for an ongoing task */
+    todo_model_turn_reply(&M, "Nice, that's a big one.");
+    todo_model_turn_done(&M, T);
+    run(TODO_LEAVE_MS + 40);
+    CHECK(state_of("vpop-agent") == TODO_ROW_HIDDEN);
+    CHECK(ongoing("[{\"id\":\"coreml-russ\",\"label\":\"CoreML models\",\"source\":\"manual\"}]"));
+    CHECK(todo_model_find(&M, "vpop-agent") == NULL); /* Muse stopped sending it */
+
+    setup("ongoing/local_state_wins");
+    F.online = false;
+    ongoing(ONGOING2);
+    todo_model_tap(&M, "vpop-agent", T);
+    run(TODO_UNDO_MS + 100);
+    CHECK(ongoing(ONGOING2)); /* Muse re-sends it before hearing about it */
+    CHECK(state_of("vpop-agent") == TODO_ROW_QUEUED);
+    CHECK(ongoing("[]")); /* dropped while still waiting: it still goes out */
+    const todo_item_t *v = todo_model_find(&M, "vpop-agent");
+    CHECK(v && v->state == TODO_ROW_QUEUED && !v->in_list && v->ongoing);
+    CHECK(todo_model_find(&M, "coreml-russ") == NULL);
+    F.online = true;
+    run(40);
+    CHECK(strstr(F.last_turn, "Completed (ongoing): Build the VPOP survey agent") != NULL);
+
+    setup("ongoing/celebration_ignores_ongoing");
+    push("[{\"id\":\"a\",\"label\":\"A\",\"source\":\"manual\"}]");
+    ongoing(ONGOING2);
+    todo_model_tap(&M, "a", T);
+    run(TODO_UNDO_MS + 40);
+    CHECK(todo_model_screen(&M) == TODO_SCREEN_CELEBRATE); /* ongoing tasks still open */
+    run(TODO_CELEBRATE_MS + 40);
+    CHECK(todo_model_screen(&M) == TODO_SCREEN_ALL_DONE);
+    /* Muse marking an ongoing task done dances but doesn't celebrate. */
+    CHECK(ongoing("[{\"id\":\"vpop-agent\",\"label\":\"Build the VPOP survey agent\",\"source\":\"manual\",\"done\":true},"
+                  "{\"id\":\"coreml-russ\",\"label\":\"CoreML models\",\"source\":\"manual\"}]"));
+    CHECK(M.dancing && !M.celebrating);
+    CHECK(state_of("vpop-agent") == TODO_ROW_AUTO_DONE);
+
+    setup("ongoing/screen");
+    CHECK(todo_model_screen(&M) == TODO_SCREEN_IDLE);
+    ongoing(ONGOING2);
+    CHECK(todo_model_screen(&M) == TODO_SCREEN_LIST); /* no daily list yet, but tasks to show */
+    ongoing("[]");
+    CHECK(todo_model_screen(&M) == TODO_SCREEN_IDLE);
+
+    setup("ongoing/reboot");
+    F.online = false;
+    push(DAY);
+    ongoing(ONGOING2);
+    todo_model_tap(&M, "coreml-russ", T);
+    run(TODO_UNDO_MS + 100);
+    char blob[16384];
+    snprintf(blob, sizeof(blob), "%s", F.saved);
+    CHECK(todo_model_restore(&M, blob, T));
+    CHECK(todo_model_find(&M, "vpop-agent")->ongoing);
+    CHECK(todo_model_find(&M, "coreml-russ")->ongoing && state_of("coreml-russ") == TODO_ROW_QUEUED);
+    CHECK(!todo_model_find(&M, "rosary@1007")->ongoing);
+    todo_model_progress(&M, &done, &total);
+    CHECK(total == 3);
+
+    setup("ongoing/add_task");
+    CHECK(todo_model_add_task(&M, "Learn Swift concurrency", true, T, err, sizeof(err)));
+    CHECK_STR(M.message, "Asking Muse to add ongoing task \"Learn Swift concurrency\"");
+    run(40);
+    CHECK_STR(F.last_turn, "[todo-display] Add ongoing task: Learn Swift concurrency (request add-1791382440-1).");
+    F.online = false;
+    todo_model_add_task(&M, "Daily thing", false, T, err, sizeof(err));
+    todo_model_add_task(&M, "Long thing", true, T, err, sizeof(err));
+    snprintf(blob, sizeof(blob), "%s", F.saved);
+    todo_model_turn_done(&M, T);
+    CHECK(todo_model_restore(&M, blob, T));
+    CHECK(M.add_count >= 2);
+    CHECK(!M.adds[M.add_count - 2].ongoing && M.adds[M.add_count - 1].ongoing);
 }
 
 static void test_message_bar(void)
@@ -732,10 +885,10 @@ static void test_list_result(void)
     todo_model_tap(&M, "rosary@1007", T);
     run(TODO_UNDO_MS + 100);
     char out[256];
-    CHECK(todo_model_list_result(&M, out, sizeof(out)));
+    CHECK(todo_model_list_result(&M, false, out, sizeof(out)));
     CHECK_STR(out, "{\"shown\":3,\"pending\":[\"rosary@1007\"]}");
     char tiny[8];
-    CHECK(!todo_model_list_result(&M, tiny, sizeof(tiny)));
+    CHECK(!todo_model_list_result(&M, false, tiny, sizeof(tiny)));
 }
 
 static void test_source_labels(void)
@@ -767,6 +920,7 @@ int main(void)
     test_celebration();
     test_dance();
     test_add_task();
+    test_ongoing();
     test_message_bar();
     test_reboot_keeps_outbox_and_list();
     test_list_result();

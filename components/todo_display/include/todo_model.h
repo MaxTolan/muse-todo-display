@@ -26,6 +26,7 @@ extern "C" {
 
 /* Limits for what Muse may send (validated in todo_model_set_list). */
 #define TODO_MAX_LIST_ITEMS 40
+#define TODO_MAX_ONGOING 15 /* multi-day tasks (issue #8) */
 #define TODO_MAX_ITEMS 64 /* list items plus completions still in the outbox */
 #define TODO_ID_MAX 96
 #define TODO_LABEL_MAX 120
@@ -64,6 +65,7 @@ typedef struct {
     char id[TODO_ID_MAX + 1];
     char label[TODO_LABEL_MAX + 1];
     char source[TODO_SOURCE_MAX + 1];
+    bool ongoing;    /* a multi-day task from todo.set_ongoing, not today's checklist */
     bool manual;     /* source == "manual" */
     bool tappable;   /* the owner can tick it off (see todo_source_tappable) */
     bool in_list;    /* present in Muse's latest push */
@@ -81,6 +83,7 @@ typedef struct {
 typedef struct {
     char id[TODO_ADD_ID_MAX + 1]; /* request ID so Muse can ignore repeats */
     char text[TODO_LABEL_MAX + 1];
+    bool ongoing;                 /* asked for as an ongoing (multi-day) task */
     bool sending;                 /* part of the chat turn in flight */
 } todo_add_t;
 
@@ -159,12 +162,19 @@ void todo_model_init(todo_model_t *m, const todo_port_t *port);
 bool todo_model_restore(todo_model_t *m, const char *blob, uint32_t now_ms);
 
 /*
- * todo.set_list: replace the list. items_json is the JSON array Muse sent (as
- * a string), date may be NULL. On error returns false and writes a short
- * reason into err; the current list is left untouched.
+ * todo.set_list: replace today's (daily) list. items_json is the JSON array
+ * Muse sent (as a string), date may be NULL. Ongoing tasks are untouched. On
+ * error returns false and writes a short reason into err; nothing changes.
  */
 bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *date,
                          uint32_t now_ms, char *err, size_t err_len);
+
+/*
+ * todo.set_ongoing: replace the ongoing (multi-day) tasks, same item format.
+ * Today's list is untouched; leaving a task out removes it. (Issue #8.)
+ */
+bool todo_model_set_ongoing(todo_model_t *m, const char *items_json, uint32_t now_ms,
+                            char *err, size_t err_len);
 
 /* todo.show_message. Returns false (with err) if the text is missing or too long. */
 bool todo_model_show_message(todo_model_t *m, const char *text, uint32_t now_ms,
@@ -175,7 +185,8 @@ bool todo_model_show_message(todo_model_t *m, const char *text, uint32_t now_ms,
  * persisted outbox and sent like completions. Returns false with err if the
  * text is empty or too long, or too many requests are already waiting.
  */
-bool todo_model_add_task(todo_model_t *m, const char *text, uint32_t now_ms, char *err, size_t err_len);
+bool todo_model_add_task(todo_model_t *m, const char *text, bool ongoing, uint32_t now_ms,
+                         char *err, size_t err_len);
 
 /* Touch input. Return true if the tap did something. */
 bool todo_model_tap(todo_model_t *m, const char *id, uint32_t now_ms);
@@ -194,15 +205,19 @@ void todo_model_tick(todo_model_t *m, uint32_t now_ms);
 todo_screen_t todo_model_screen(const todo_model_t *m);
 bool todo_model_item_visible(const todo_item_t *it);
 const todo_item_t *todo_model_find(const todo_model_t *m, const char *id);
+/* Today's list only: ongoing tasks don't count toward "N of M done". */
 void todo_model_progress(const todo_model_t *m, int *done, int *total);
+/* Ongoing tasks on screen (not hidden). */
+int todo_model_ongoing_visible(const todo_model_t *m);
 /* Completions waiting in the outbox (queued or sending). */
 int todo_model_outbox_count(const todo_model_t *m);
 
 /*
- * The todo.set_list return payload: {"shown":N,"pending":[ids]}. Writes at
- * most len bytes; returns false if it didn't fit.
+ * The todo.set_list / todo.set_ongoing return payload: {"shown":N,"pending":[ids]},
+ * where shown counts that kind's items on screen and pending is every
+ * completion still being reported. Returns false if it didn't fit in len.
  */
-bool todo_model_list_result(const todo_model_t *m, char *out, size_t len);
+bool todo_model_list_result(const todo_model_t *m, bool ongoing, char *out, size_t len);
 
 /*
  * How long a message stays in the bar: 30 s if it is under 50 characters,

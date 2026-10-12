@@ -39,6 +39,10 @@
   avatar (`esp32/avatar`, which includes `muse_pixel.c`). The owner accepts this: personal
   project, never sold. Keep using the SDK's avatar as is.
 
+- Ongoing tasks (Oct 12, issue #8): a separate `todo.set_ongoing` command ("design A", chosen
+  by Muse on the issue); ongoing tasks are left out of the progress count and the celebration;
+  the add-task sheet has an "Ongoing task" toggle (owner).
+
 ## Decided by the implementer (flag if you disagree)
 
 - **Before pairing, the todo screen shows** ("waiting for today's list" plus how to pair:

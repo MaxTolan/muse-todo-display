@@ -48,9 +48,10 @@ clock (fixed to 2026-10-07 09:14 America/Chicago unless `clock=` sets it).
 | `online`, `refuse_turns` | `true` / `false` |
 | `list_date` | Date text for the next push |
 | `set_list` / `set_list_file` | `todo.set_list` items: inline JSON, or a file next to the scenario |
+| `set_ongoing` / `set_ongoing_file` | `todo.set_ongoing` items (the ongoing tasks), same forms |
 | `set_list_expect_error` | JSON that must be rejected |
 | `message` | `todo.show_message` text |
-| `tap` | `row:<id>`, `undo:<id>`, `message`, `add`, `sheet_add`, `sheet_cancel` (a real touch at that spot) |
+| `tap` | `row:<id>`, `undo:<id>`, `message`, `add`, `sheet_add`, `sheet_cancel`, `sheet_ongoing` (a real touch at that spot) |
 | `tap_at` | `x,y`: a touch at exact screen coordinates |
 | `type` | Type text on the add-task keyboard, key by key (letters, digits, common punctuation) |
 | `key` | Press one keyboard key: a label, or `backspace`, `ok`, `enter`, `close` |

@@ -74,9 +74,10 @@ static bool is_outbox(const todo_item_t *it)
     return it->state == TODO_ROW_QUEUED || it->state == TODO_ROW_SENDING;
 }
 
+/* Open on today's list: ongoing tasks never hold up "all done". */
 static bool is_open(const todo_item_t *it)
 {
-    return it->in_list && (it->state == TODO_ROW_OPEN || it->state == TODO_ROW_UNDO);
+    return it->in_list && !it->ongoing && (it->state == TODO_ROW_OPEN || it->state == TODO_ROW_UNDO);
 }
 
 static int open_count(const todo_model_t *m)
@@ -200,6 +201,7 @@ static void save(todo_model_t *m)
         cJSON_AddStringToObject(o, "label", it->label);
         cJSON_AddStringToObject(o, "source", it->source);
         cJSON_AddBoolToObject(o, "in_list", it->in_list);
+        cJSON_AddBoolToObject(o, "ongoing", it->ongoing);
         cJSON_AddBoolToObject(o, "done", it->muse_done);
         cJSON_AddStringToObject(o, "st", st);
         cJSON_AddNumberToObject(o, "at", (double)it->completed_at);
@@ -213,6 +215,7 @@ static void save(todo_model_t *m)
         if (o) {
             cJSON_AddStringToObject(o, "id", m->adds[i].id);
             cJSON_AddStringToObject(o, "text", m->adds[i].text);
+            cJSON_AddBoolToObject(o, "ongoing", m->adds[i].ongoing);
             cJSON_AddItemToArray(adds, o);
         }
     }
@@ -273,6 +276,7 @@ bool todo_model_restore(todo_model_t *m, const char *blob, uint32_t now_ms)
         it->manual = !strcmp(it->source, "manual");
         it->tappable = todo_source_tappable(it->source);
         it->in_list = get_bool(o, "in_list");
+        it->ongoing = get_bool(o, "ongoing");
         it->muse_done = get_bool(o, "done");
         it->completed_at = (time_t)get_num(o, "at");
         if (!strcmp(st, "queued")) {
@@ -295,6 +299,7 @@ bool todo_model_restore(todo_model_t *m, const char *blob, uint32_t now_ms)
         memset(a, 0, sizeof(*a));
         copy_str(a->id, sizeof(a->id), id);
         copy_str(a->text, sizeof(a->text), text);
+        a->ongoing = get_bool(o, "ongoing");
     }
     cJSON_Delete(root);
     m->seq++;
@@ -346,15 +351,15 @@ static bool check_str(const cJSON *o, const char *key, size_t max, bool allow_co
     return true;
 }
 
-bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *date,
-                         uint32_t now_ms, char *err, size_t err_len)
+/*
+ * Replace one kind of item (today's list, or the ongoing tasks) from Muse's
+ * JSON array, keeping the other kind exactly as it is.
+ */
+static bool replace_items(todo_model_t *m, const char *items_json, bool ongoing,
+                          uint32_t now_ms, char *err, size_t err_len)
 {
     if (!items_json) {
         set_err(err, err_len, "%s", "items is required");
-        return false;
-    }
-    if (date && strlen(date) > TODO_DATE_MAX) {
-        set_err(err, err_len, "%s", "date too long");
         return false;
     }
     cJSON *arr = cJSON_Parse(items_json);
@@ -364,9 +369,9 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
         return false;
     }
     int n = cJSON_GetArraySize(arr);
-    if (n > TODO_MAX_LIST_ITEMS) {
+    if (n > (ongoing ? TODO_MAX_ONGOING : TODO_MAX_LIST_ITEMS)) {
         cJSON_Delete(arr);
-        set_err(err, err_len, "%s", "too many items (max 40)");
+        set_err(err, err_len, "%s", ongoing ? "too many ongoing tasks (max 15)" : "too many items (max 40)");
         return false;
     }
 
@@ -382,6 +387,15 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
         return false;
     }
     size_t count = 0;
+
+    /* The other kind stays exactly as it is. */
+    for (size_t i = 0; i < m->count; i++) {
+        if (m->items[i].ongoing != ongoing) {
+            next[count++] = m->items[i];
+        }
+    }
+    size_t first_new = count;
+
     bool ok = true;
     bool completed_by_muse = false;
     const cJSON *o;
@@ -406,12 +420,21 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
         }
         for (size_t j = 0; j < count; j++) {
             if (!strcmp(next[j].id, id)) {
-                set_err(err, err_len, "duplicate id %s", id);
+                /* An id belongs to one list: neither command may touch the other's. */
+                set_err(err, err_len, j < first_new ? (ongoing ? "id %s is on today's list"
+                                                               : "id %s is an ongoing task")
+                                                    : "duplicate id %s",
+                        id);
                 ok = false;
                 break;
             }
         }
         if (!ok) {
+            break;
+        }
+        if (count >= TODO_MAX_ITEMS) {
+            set_err(err, err_len, "%s", "too many items in all");
+            ok = false;
             break;
         }
 
@@ -428,6 +451,7 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
         copy_str(it->label, sizeof(it->label), label);
         flatten(it->label);
         copy_str(it->source, sizeof(it->source), source);
+        it->ongoing = ongoing;
         it->manual = !strcmp(source, "manual");
         it->tappable = todo_source_tappable(source);
         it->in_list = true;
@@ -466,14 +490,17 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
         return false;
     }
 
-    /* Completions Muse no longer lists still go out. */
+    /* Completions of this kind that Muse no longer lists still go out. */
     for (size_t i = 0; i < m->count; i++) {
         const todo_item_t *old = &m->items[i];
+        if (old->ongoing != ongoing || !is_outbox(old)) {
+            continue;
+        }
         bool listed = false;
-        for (size_t j = 0; j < count && !listed; j++) {
+        for (size_t j = first_new; j < count && !listed; j++) {
             listed = !strcmp(next[j].id, old->id);
         }
-        if (listed || !is_outbox(old)) {
+        if (listed) {
             continue;
         }
         if (count >= TODO_MAX_ITEMS) {
@@ -490,13 +517,38 @@ bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *da
     memcpy(m->items, next, count * sizeof(next[0]));
     free(next);
     m->count = count;
-    m->have_list = true;
-    copy_str(m->date, sizeof(m->date), date ? date : "");
     if (completed_by_muse) {
         start_dance(m, now_ms);
     }
-    if (open_before > 0 && completed_by_muse && open_count(m) == 0) {
+    /* Only today's list can finish the day (ongoing tasks can take weeks). */
+    if (!ongoing && open_before > 0 && completed_by_muse && open_count(m) == 0) {
         start_celebration(m, now_ms);
+    }
+    return true;
+}
+
+bool todo_model_set_list(todo_model_t *m, const char *items_json, const char *date,
+                         uint32_t now_ms, char *err, size_t err_len)
+{
+    if (date && strlen(date) > TODO_DATE_MAX) {
+        set_err(err, err_len, "%s", "date too long");
+        return false;
+    }
+    if (!replace_items(m, items_json, false, now_ms, err, err_len)) {
+        return false;
+    }
+    m->have_list = true;
+    copy_str(m->date, sizeof(m->date), date ? date : "");
+    m->seq++;
+    save(m);
+    return true;
+}
+
+bool todo_model_set_ongoing(todo_model_t *m, const char *items_json, uint32_t now_ms,
+                            char *err, size_t err_len)
+{
+    if (!replace_items(m, items_json, true, now_ms, err, err_len)) {
+        return false;
     }
     m->seq++;
     save(m);
@@ -518,7 +570,8 @@ bool todo_model_show_message(todo_model_t *m, const char *text, uint32_t now_ms,
     return true;
 }
 
-bool todo_model_add_task(todo_model_t *m, const char *text, uint32_t now_ms, char *err, size_t err_len)
+bool todo_model_add_task(todo_model_t *m, const char *text, bool ongoing, uint32_t now_ms,
+                         char *err, size_t err_len)
 {
     char clean[TODO_LABEL_MAX + 1];
     if (!text) {
@@ -557,9 +610,11 @@ bool todo_model_add_task(todo_model_t *m, const char *text, uint32_t now_ms, cha
         snprintf(a->id, sizeof(a->id), "add-%u", (unsigned)m->add_seq);
     }
     copy_str(a->text, sizeof(a->text), start);
+    a->ongoing = ongoing;
 
-    char note[TODO_LABEL_MAX + 40];
-    snprintf(note, sizeof(note), "Asking Muse to add \"%s\"", a->text);
+    char note[TODO_LABEL_MAX + 48];
+    snprintf(note, sizeof(note), ongoing ? "Asking Muse to add ongoing task \"%s\"" : "Asking Muse to add \"%s\"",
+             a->text);
     set_message(m, note, now_ms);
     save(m);
     return true;
@@ -650,13 +705,15 @@ static char *build_turn(const todo_model_t *m)
             snprintf(by_hand, sizeof(by_hand), ", marked by hand before %s caught up",
                      todo_source_label(it->source));
         }
-        used += (size_t)snprintf(text + used, cap - used, "%s[todo-display] Completed: %s (id %s)%s%s.",
-                                 used ? "\n" : "", it->label, it->id, when, by_hand);
+        /* Ongoing: the format agreed with Muse on issue #8 ("stop sending this one"). */
+        used += (size_t)snprintf(text + used, cap - used, "%s[todo-display] Completed%s: %s (id %s)%s%s.",
+                                 used ? "\n" : "", it->ongoing ? " (ongoing)" : "", it->label, it->id,
+                                 it->ongoing ? "" : when, by_hand);
     }
     for (size_t i = 0; i < m->add_count; i++) {
         const todo_add_t *a = &m->adds[i];
-        used += (size_t)snprintf(text + used, cap - used, "%s[todo-display] Add task: %s (request %s).",
-                                 used ? "\n" : "", a->text, a->id);
+        used += (size_t)snprintf(text + used, cap - used, "%s[todo-display] Add %s: %s (request %s).",
+                                 used ? "\n" : "", a->ongoing ? "ongoing task" : "task", a->text, a->id);
     }
     return text;
 }
@@ -879,7 +936,9 @@ todo_screen_t todo_model_screen(const todo_model_t *m)
         return TODO_SCREEN_CELEBRATE;
     }
     if (!m->have_list) {
-        return todo_model_outbox_count(m) ? TODO_SCREEN_LIST : TODO_SCREEN_IDLE;
+        /* No daily list yet, but ongoing tasks or unsent completions to show. */
+        return todo_model_outbox_count(m) || todo_model_ongoing_visible(m) ? TODO_SCREEN_LIST
+                                                                           : TODO_SCREEN_IDLE;
     }
     return open_count(m) ? TODO_SCREEN_LIST : TODO_SCREEN_ALL_DONE;
 }
@@ -889,7 +948,7 @@ void todo_model_progress(const todo_model_t *m, int *done, int *total)
     int d = 0, t = 0;
     for (size_t i = 0; i < m->count; i++) {
         const todo_item_t *it = &m->items[i];
-        if (!it->in_list) {
+        if (!it->in_list || it->ongoing) {
             continue;
         }
         t++;
@@ -899,11 +958,21 @@ void todo_model_progress(const todo_model_t *m, int *done, int *total)
     *total = t;
 }
 
-bool todo_model_list_result(const todo_model_t *m, char *out, size_t len)
+int todo_model_ongoing_visible(const todo_model_t *m)
+{
+    int n = 0;
+    for (size_t i = 0; i < m->count; i++) {
+        n += m->items[i].ongoing && todo_model_item_visible(&m->items[i]);
+    }
+    return n;
+}
+
+bool todo_model_list_result(const todo_model_t *m, bool ongoing, char *out, size_t len)
 {
     int shown = 0;
     for (size_t i = 0; i < m->count; i++) {
-        shown += m->items[i].in_list && todo_model_item_visible(&m->items[i]);
+        const todo_item_t *it = &m->items[i];
+        shown += it->in_list && it->ongoing == ongoing && todo_model_item_visible(it);
     }
     size_t used = (size_t)snprintf(out, len, "{\"shown\":%d,\"pending\":[", shown);
     bool first = true;

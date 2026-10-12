@@ -36,7 +36,7 @@ void todo_ui_peek(uint32_t now_ms);
 /*
  * Screen point to touch for a target, for scripted input in the simulator:
  * "row:<id>", "undo:<id>", "message", "add" (the + button), or while the
- * add-task sheet is open "sheet_add" / "sheet_cancel". Returns false if it
+ * add-task sheet is open "sheet_add" / "sheet_cancel" / "sheet_ongoing". Returns false if it
  * isn't on screen.
  */
 bool todo_ui_point_for(const char *target, lv_point_t *pt);

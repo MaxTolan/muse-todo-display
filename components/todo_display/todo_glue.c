@@ -272,9 +272,19 @@ static void register_commands(cJSON *commands)
     cJSON *opt = cJSON_CreateObject();
     cJSON_AddItemToObject(opt, "date", string_param("The day the list is for, shown at the top."));
     add_command(commands, "todo.set_list",
-                "Replace the owner's desk todo list. Send the whole list each morning and whenever "
-                "anything changes. Returns how many are shown and the ids still being reported back.",
+                "Replace the owner's daily desk todo list (ongoing tasks are separate: todo.set_ongoing). "
+                "Send the whole list each morning and whenever anything changes. Returns how many are "
+                "shown and the ids still being reported back.",
                 req, opt);
+
+    cJSON *oreq = cJSON_CreateObject();
+    cJSON_AddItemToObject(oreq, "items", string_param(
+        "JSON array (as a string) of {id, label, source, done}, like todo.set_list. Use stable ids "
+        "with no date. Max 15."));
+    add_command(commands, "todo.set_ongoing",
+                "Replace the owner's ongoing (multi-day) tasks, shown in their own section. "
+                "todo.set_list never changes them; leave a task out here to remove it.",
+                oreq, NULL);
 
     cJSON *mreq = cJSON_CreateObject();
     cJSON_AddItemToObject(mreq, "text", string_param("The message, at most 280 characters."));
@@ -324,7 +334,7 @@ static cJSON *command(const char *name, cJSON *params)
         bool ok = false;
         if (lock()) {
             ok = todo_model_set_list(&s_model, items, date, now_ms(), err, sizeof(err));
-            if (ok && !todo_model_list_result(&s_model, payload, sizeof(payload))) {
+            if (ok && !todo_model_list_result(&s_model, false, payload, sizeof(payload))) {
                 snprintf(payload, sizeof(payload), "{}");
             }
             unlock();
@@ -334,6 +344,27 @@ static cJSON *command(const char *name, cJSON *params)
             return result_error(err[0] ? err : "busy");
         }
         ESP_LOGI(TAG, "todo.set_list: %s", payload);
+        return result_ok(cJSON_Parse(payload));
+    }
+    if (!strcmp(name, "todo.set_ongoing")) {
+        const char *items = param_str(params, "items");
+        if (!items) {
+            return result_error("items is required (a JSON array, as a string)");
+        }
+        char payload[1024];
+        bool ok = false;
+        if (lock()) {
+            ok = todo_model_set_ongoing(&s_model, items, now_ms(), err, sizeof(err));
+            if (ok && !todo_model_list_result(&s_model, true, payload, sizeof(payload))) {
+                snprintf(payload, sizeof(payload), "{}");
+            }
+            unlock();
+        }
+        if (!ok) {
+            ESP_LOGW(TAG, "todo.set_ongoing rejected: %s", err);
+            return result_error(err[0] ? err : "busy");
+        }
+        ESP_LOGI(TAG, "todo.set_ongoing: %s", payload);
         return result_ok(cJSON_Parse(payload));
     }
     if (!strcmp(name, "todo.show_message")) {
