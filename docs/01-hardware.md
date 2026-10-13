@@ -46,6 +46,13 @@ Lamicall phone/tablet dock stand (pink), holds the board upright on the desk. Ar
 - **GPIO0 (BOOT) is RGB data line D6**, so the BOOT button can't be polled while the panel
   runs. Pairing is confirmed by touch instead (same as the SDK's LCD-7 port).
 
+- **Wi-Fi with a range extender (owner's network, Oct 13):** the board is 2.4 GHz only. The SDK
+  joins the strongest access point for the network name, the nearby extender, which sometimes
+  refuses it outright (reason 1 within ~25 ms, then 205), whether WPA3 or WPA2. Patch 0004 makes
+  the SDK remember the refusing access point and pick another for that SSID (the main router)
+  on the next attempt; a fresh boot tries the strongest again. Seen working both ways: via the
+  router after a refusal, and via the extender on a later boot.
+
 ## Same family as the SDK's LCD-7 port
 
 The SDK's Waveshare ESP32-S3-Touch-LCD-7 port (`components/muse/boards/board_waveshare_s3_lcd7.c`)

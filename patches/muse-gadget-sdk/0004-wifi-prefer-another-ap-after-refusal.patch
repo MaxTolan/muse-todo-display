@@ -1,0 +1,82 @@
+diff --git a/esp32/main/wifi_mgr.c b/esp32/main/wifi_mgr.c
+index 7a5de97..c0c19df 100644
+--- a/esp32/main/wifi_mgr.c
++++ b/esp32/main/wifi_mgr.c
+@@ -77,6 +77,19 @@ typedef struct {
+ 
+ static bssid_cache_entry_t s_bssid_cache[MAX_CACHED_SCANS];
+ static int s_bssid_cache_count = 0;
++
++// The last access point that refused a join pinned to it. With several APs
++// for one SSID (a router and a range extender, a mesh), the strongest can
++// reject this device outright (e.g. an extender answering reason 1 within
++// milliseconds) while another accepts it. Prefer any other BSSID for that
++// SSID; if it's the only one, it's still used. RAM only: a reboot tries the
++// strongest again first.
++static uint8_t s_refused_bssid[6];
++static bool s_refused_set;
++
++static bool refused(const uint8_t *bssid) {
++    return s_refused_set && memcmp(bssid, s_refused_bssid, 6) == 0;
++}
+ static struct {
+     char ssid[33];
+     uint8_t channel;
+@@ -366,7 +379,13 @@ bool wifi_mgr_connect(const char *ssid, const char *password, int timeout_ms) {
+     connected = (bits & BIT_GOT_IP) != 0;
+     if (!connected && have_bssid) {
+         // Cached BSSID didn't work — invalidate so next attempt does a full
+-        // scan (AP may have changed channel or gone away).
++        // scan (AP may have changed channel or gone away), and prefer another
++        // AP for this SSID next time if the scan finds one.
++        memcpy(s_refused_bssid, wc.sta.bssid, 6);
++        s_refused_set = true;
++        ESP_LOGW(TAG, "AP %02x:%02x:%02x:%02x:%02x:%02x refused the join; preferring another for %s",
++                 wc.sta.bssid[0], wc.sta.bssid[1], wc.sta.bssid[2],
++                 wc.sta.bssid[3], wc.sta.bssid[4], wc.sta.bssid[5], ssid);
+         s_bssid_cache_count = 0;
+     }
+ 
+@@ -523,8 +542,16 @@ int wifi_mgr_scan(wifi_scan_entry_t *out, int max_entries, uint8_t channel,
+         out[n].rssi = recs[i].rssi;
+         out[n].auth_mode = (uint8_t)recs[i].authmode;
+         // Cache the strongest BSSID for this SSID (first seen = strongest,
+-        // since recs is RSSI-sorted). Retain entries missed by a BLE
+-        // coexistence refresh so Connect can still use the boot-scan target.
++        // since recs is RSSI-sorted), but not the AP that last refused us
++        // when this scan has another for the SSID. Retain entries missed by a
++        // BLE coexistence refresh so Connect can still use the boot-scan
++        // target.
++        const wifi_ap_record_t *best = &recs[i];
++        for (int k = i; k < want && refused(best->bssid); k++) {
++            if (strcmp((const char *)recs[k].ssid, ssid) == 0 && !refused(recs[k].bssid)) {
++                best = &recs[k];
++            }
++        }
+         int cached = -1;
+         for (int j = 0; j < s_bssid_cache_count; j++) {
+             if (strcmp(s_bssid_cache[j].ssid, ssid) == 0) {
+@@ -532,16 +559,19 @@ int wifi_mgr_scan(wifi_scan_entry_t *out, int max_entries, uint8_t channel,
+                 break;
+             }
+         }
++        // A one-channel scan may only see the refusing AP: keep another AP
++        // an earlier full scan cached for this SSID rather than going back.
++        bool keep = cached >= 0 && refused(best->bssid) && !refused(s_bssid_cache[cached].bssid);
+         if (cached < 0 && s_bssid_cache_count < MAX_CACHED_SCANS) {
+             cached = s_bssid_cache_count++;
+         }
+-        if (cached >= 0) {
++        if (cached >= 0 && !keep) {
+             bssid_cache_entry_t *entry = &s_bssid_cache[cached];
+             strncpy(entry->ssid, ssid, sizeof(entry->ssid) - 1);
+             entry->ssid[sizeof(entry->ssid) - 1] = '\0';
+-            memcpy(entry->bssid, recs[i].bssid, sizeof(entry->bssid));
+-            entry->rssi = recs[i].rssi;
+-            entry->channel = recs[i].primary;
++            memcpy(entry->bssid, best->bssid, sizeof(entry->bssid));
++            entry->rssi = best->rssi;
++            entry->channel = best->primary;
+         }
+         n++;
+     }

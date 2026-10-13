@@ -82,7 +82,8 @@ pushes. New item sources need no firmware change (see the `source` field in `04`
 - `tools/fw.sh` — build / flash / monitor the firmware (see `05-open-questions-and-build.md`).
 - `patches/muse-gadget-sdk/` — our changes to the SDK, applied by `tools/fw.sh`: 0001 the 5" board
   port, 0002 extra config overlays in `board.sh`, 0003 `muse_ext.h` (hooks for an app
-  component: screen on the face tile, commands, typed-turn results).
+  component: screen on the face tile, commands, typed-turn results), 0004 Wi-Fi tries another
+  access point for the network after one refuses the join (`01-hardware.md`).
 - `firmware/sdkconfig.todo` — our build settings (todo component on, fonts, keyboard).
 
 The todo screen is the device's **main screen**; the SDK's avatar and settings screens stay for
