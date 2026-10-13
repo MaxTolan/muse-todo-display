@@ -12,10 +12,10 @@ index 2732802..a17a1b2 100644
  elseif(CONFIG_HOMEHUB_VOICE)
      # The Voice PE board uses just the Hatch voice session; the project's main/
 diff --git a/esp32/components/muse/Kconfig b/esp32/components/muse/Kconfig
-index 0c18ced..4ddd58d 100644
+index 0c18ced..b407907 100644
 --- a/esp32/components/muse/Kconfig
 +++ b/esp32/components/muse/Kconfig
-@@ -84,6 +84,9 @@ menu "Muse"
+@@ -84,8 +84,20 @@ menu "Muse"
          config MUSE_BOARD_WAVESHARE_S3_LCD7
              bool "Waveshare ESP32-S3-Touch-LCD-7 (800x480 touch LCD, no audio)"
              depends on IDF_TARGET_ESP32S3
@@ -24,8 +24,19 @@ index 0c18ced..4ddd58d 100644
 +            depends on IDF_TARGET_ESP32S3
      endchoice
  
++    config MUSE_LCD5_ROTATION
++        int "Waveshare LCD-5: screen rotation (0, 90 clockwise, 270 counter-clockwise)"
++        depends on MUSE_BOARD_WAVESHARE_S3_LCD5
++        range 0 270
++        default 0
++        help
++            0 for landscape. 90 when the board stands in portrait turned
++            clockwise from landscape, 270 when turned counter-clockwise.
++
      config MUSE_ENABLED
-@@ -109,6 +112,7 @@ menu "Muse"
+         bool
+         default y if !MUSE_BOARD_NONE
+@@ -109,6 +121,7 @@ menu "Muse"
          default "fnk0104b" if MUSE_BOARD_FNK0104B
          default "guition_jc3248w535" if MUSE_BOARD_GUITION_JC3248W535
          default "waveshare_s3_lcd7" if MUSE_BOARD_WAVESHARE_S3_LCD7
@@ -35,10 +46,10 @@ index 0c18ced..4ddd58d 100644
      # The Muse tools' serial port: the console UART behind the board's USB
 diff --git a/esp32/components/muse/boards/board_waveshare_s3_lcd5.c b/esp32/components/muse/boards/board_waveshare_s3_lcd5.c
 new file mode 100644
-index 0000000..81222be
+index 0000000..ca88031
 --- /dev/null
 +++ b/esp32/components/muse/boards/board_waveshare_s3_lcd5.c
-@@ -0,0 +1,366 @@
+@@ -0,0 +1,484 @@
 +/*
 + * Copyright (c) Meta Platforms, Inc. and affiliates.
 + * Licensed under the Apache License, Version 2.0.
@@ -58,6 +69,7 @@ index 0000000..81222be
 +#include "driver/i2c_master.h"
 +#include "esp_attr.h"
 +#include "esp_check.h"
++#include "esp_heap_caps.h"
 +#include "esp_lcd_panel_io.h"
 +#include "esp_lcd_panel_ops.h"
 +#include "esp_lcd_panel_rgb.h"
@@ -89,8 +101,24 @@ index 0000000..81222be
 + * buffers have copied a whole frame) before LVGL may draw into the old one.
 + * LVGL's direct mode keeps the two buffers in sync.
 + */
-+#define LCD_W 800
++#define LCD_W 800 /* the panel, as wired: landscape */
 +#define LCD_H 480
++
++/*
++ * Orientation (CONFIG_MUSE_LCD5_ROTATION): 0 landscape, 90 when the board
++ * stands turned clockwise, 270 counter-clockwise. In portrait LVGL draws a
++ * 480x800 screen in strips and flush() turns each strip into the panel's
++ * hidden frame buffer; touch is turned back the other way.
++ */
++#ifndef CONFIG_MUSE_LCD5_ROTATION
++#define CONFIG_MUSE_LCD5_ROTATION 0
++#endif
++#define ROTATION CONFIG_MUSE_LCD5_ROTATION
++#define PORTRAIT (ROTATION == 90 || ROTATION == 270)
++#define LOG_W (PORTRAIT ? LCD_H : LCD_W) /* what LVGL and the SDK see */
++#define LOG_H (PORTRAIT ? LCD_W : LCD_H)
++#define STRIP_ROWS 80 /* LVGL draw-buffer height in portrait */
++#define MAX_DIRTY 24
 +#define EXP_CONFIG_ADDR 0x24
 +#define EXP_OUTPUT_ADDR 0x38
 +#define EXP_TOUCH_RST BIT(1)
@@ -113,6 +141,12 @@ index 0000000..81222be
 +static esp_err_t s_start_err;
 +static bool s_was_pressed;
 +static SemaphoreHandle_t s_frame_done; /* the driver switched to the buffer we handed it */
++#if PORTRAIT
++static uint16_t *s_fb[2];            /* the panel's frame buffers */
++static int s_front;                  /* the one on screen */
++static lv_area_t s_dirty[MAX_DIRTY]; /* panel areas drawn into the back buffer this frame */
++static int s_ndirty;                 /* > MAX_DIRTY: the whole screen */
++#endif
 +
 +static esp_err_t exp_write(uint8_t state)
 +{
@@ -250,18 +284,89 @@ index 0000000..81222be
 +    return (uint32_t)(esp_timer_get_time() / 1000);
 +}
 +
++/* Hand the back buffer to the driver and wait until it's the one being sent. */
++static void show_buffer(uint8_t *fb)
++{
++    xSemaphoreTake(s_frame_done, 0); /* drop a stale signal */
++    esp_lcd_panel_draw_bitmap(s_panel, 0, 0, LCD_W, LCD_H, fb);
++    /* One frame is ~26 ms at 16 MHz; don't hang the UI if the signal is lost. */
++    xSemaphoreTake(s_frame_done, pdMS_TO_TICKS(60));
++}
++
++#if PORTRAIT
++/* A portrait (logical) point's place on the landscape panel. */
++static inline void to_panel(int32_t x, int32_t y, int32_t *X, int32_t *Y)
++{
++#if ROTATION == 90
++    *X = y;                 /* board turned clockwise: its left edge is now the top */
++    *Y = LCD_H - 1 - x;
++#else
++    *X = LCD_W - 1 - y;     /* counter-clockwise */
++    *Y = x;
++#endif
++}
++
++static void note_dirty(const lv_area_t *a)
++{
++    if (s_ndirty < MAX_DIRTY) {
++        s_dirty[s_ndirty] = *a;
++    }
++    s_ndirty++;
++}
++
++/* Copy the areas drawn last frame from the shown buffer into the new back one. */
++static void sync_back(void)
++{
++    uint16_t *src = s_fb[s_front], *dst = s_fb[!s_front];
++    if (s_ndirty > MAX_DIRTY) {
++        memcpy(dst, src, LCD_W * LCD_H * 2);
++    } else {
++        for (int i = 0; i < s_ndirty; i++) {
++            const lv_area_t *a = &s_dirty[i];
++            size_t n = (size_t)(a->x2 - a->x1 + 1) * 2;
++            for (int32_t Y = a->y1; Y <= a->y2; Y++) {
++                memcpy(&dst[Y * LCD_W + a->x1], &src[Y * LCD_W + a->x1], n);
++            }
++        }
++    }
++    s_ndirty = 0;
++}
++
++static void flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
++{
++    /* Turn the strip into the back buffer. */
++    const uint16_t *p = (const uint16_t *)px;
++    uint16_t *back = s_fb[!s_front];
++    for (int32_t y = area->y1; y <= area->y2; y++) {
++        for (int32_t x = area->x1; x <= area->x2; x++) {
++            int32_t X, Y;
++            to_panel(x, y, &X, &Y);
++            back[Y * LCD_W + X] = *p++;
++        }
++    }
++    int32_t X1, Y1, X2, Y2;
++    to_panel(area->x1, area->y1, &X1, &Y1);
++    to_panel(area->x2, area->y2, &X2, &Y2);
++    lv_area_t pa = { LV_MIN(X1, X2), LV_MIN(Y1, Y2), LV_MAX(X1, X2), LV_MAX(Y1, Y2) };
++    note_dirty(&pa);
++    if (lv_display_flush_is_last(disp)) {
++        show_buffer((uint8_t *)back);
++        s_front = !s_front;
++        sync_back();
++    }
++    lv_display_flush_ready(disp);
++}
++#else
 +static void flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px)
 +{
 +    (void)area;
 +    if (lv_display_flush_is_last(disp)) {
 +        /* px is the whole buffer LVGL just finished: show it from the next frame. */
-+        xSemaphoreTake(s_frame_done, 0); /* drop a stale signal */
-+        esp_lcd_panel_draw_bitmap(s_panel, 0, 0, LCD_W, LCD_H, px);
-+        /* One frame is ~26 ms at 16 MHz; don't hang the UI if the signal is lost. */
-+        xSemaphoreTake(s_frame_done, pdMS_TO_TICKS(60));
++        show_buffer(px);
 +    }
 +    lv_display_flush_ready(disp);
 +}
++#endif
 +
 +static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
 +{
@@ -276,8 +381,18 @@ index 0000000..81222be
 +        s_was_pressed = false;
 +        return;
 +    }
-+    data->point.x = point.x < LCD_W ? point.x : LCD_W - 1;
-+    data->point.y = point.y < LCD_H ? point.y : LCD_H - 1;
++    int32_t px = point.x < LCD_W ? point.x : LCD_W - 1;
++    int32_t py = point.y < LCD_H ? point.y : LCD_H - 1;
++#if ROTATION == 90
++    data->point.x = LCD_H - 1 - py; /* the inverse of to_panel() */
++    data->point.y = px;
++#elif ROTATION == 270
++    data->point.x = py;
++    data->point.y = LCD_W - 1 - px;
++#else
++    data->point.x = px;
++    data->point.y = py;
++#endif
 +    data->state = LV_INDEV_STATE_PRESSED;
 +    if (!s_was_pressed && muse_link_state() == MUSE_LINK_CONFIRM) {
 +        if (muse_link_talk_press()) {
@@ -297,12 +412,26 @@ index 0000000..81222be
 +    ESP_RETURN_ON_FALSE(fb && fb2, ESP_ERR_NO_MEM, TAG, "no frame buffers");
 +    memset(fb, 0, LCD_W * LCD_H * 2);
 +    memset(fb2, 0, LCD_W * LCD_H * 2);
++#if PORTRAIT
++    s_fb[0] = fb;
++    s_fb[1] = fb2;
++    s_front = 0; /* the driver starts on the first */
++#endif
 +    lv_init();
 +    lv_tick_set_cb(tick_ms);
-+    s_disp = lv_display_create(LCD_W, LCD_H);
++    s_disp = lv_display_create(LOG_W, LOG_H);
 +    ESP_RETURN_ON_FALSE(s_disp, ESP_ERR_NO_MEM, TAG, "LVGL display");
 +    lv_display_set_color_format(s_disp, LV_COLOR_FORMAT_RGB565);
++#if PORTRAIT
++    /* LVGL draws portrait strips; flush() turns them into the panel's buffers. */
++    size_t strip = (size_t)LOG_W * STRIP_ROWS * 2;
++    void *d1 = heap_caps_aligned_alloc(64, strip, MUSE_BIG_CAPS);
++    void *d2 = heap_caps_aligned_alloc(64, strip, MUSE_BIG_CAPS);
++    ESP_RETURN_ON_FALSE(d1 && d2, ESP_ERR_NO_MEM, TAG, "draw buffers");
++    lv_display_set_buffers(s_disp, d1, d2, strip, LV_DISPLAY_RENDER_MODE_PARTIAL);
++#else
 +    lv_display_set_buffers(s_disp, fb, fb2, LCD_W * LCD_H * 2, LV_DISPLAY_RENDER_MODE_DIRECT);
++#endif
 +    lv_display_set_flush_cb(s_disp, flush);
 +    s_indev = lv_indev_create();
 +    ESP_RETURN_ON_FALSE(s_indev, ESP_ERR_NO_MEM, TAG, "LVGL touch");
@@ -384,8 +513,8 @@ index 0000000..81222be
 +
 +static const muse_board_t s_board = {
 +    .name = "Waveshare ESP32-S3-Touch-LCD-5",
-+    .width = LCD_W,
-+    .height = LCD_H,
++    .width = LOG_W,
++    .height = LOG_H,
 +    .avatar_px = 288,
 +    .round = false,
 +    .touch = true,

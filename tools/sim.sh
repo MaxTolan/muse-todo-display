@@ -56,7 +56,9 @@ previews)
     out="$ROOT/build/previews"
     rm -rf "$out" && mkdir -p "$out"
     for scenario in "$ROOT"/sim/scenarios/*.txt; do
-        "$BUILD/todo_sim" --headless --scenario "$scenario" --out "$out" >/dev/null
+        size=""
+        [[ "$(basename "$scenario")" == portrait* ]] && size="--portrait"
+        "$BUILD/todo_sim" --headless $size --scenario "$scenario" --out "$out" >/dev/null
     done
     python3 "$ROOT/tools/compress_previews.py" "$out" "$ROOT/docs/previews"
     ;;

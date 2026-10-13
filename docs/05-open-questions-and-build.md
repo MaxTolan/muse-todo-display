@@ -43,6 +43,11 @@
   by Muse on the issue); ongoing tasks are left out of the progress count and the celebration;
   the add-task sheet has an "Ongoing task" toggle (owner).
 
+- Orientation (Oct 13): portrait, turned clockwise, for the whole device
+  (`CONFIG_MUSE_LCD5_ROTATION=90`).
+- All done with ongoing tasks left (Oct 13): celebration view in the top half, ongoing tasks in
+  the bottom half.
+
 ## Decided by the implementer (flag if you disagree)
 
 - **Before pairing, the todo screen shows** ("waiting for today's list" plus how to pair:

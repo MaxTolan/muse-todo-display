@@ -1,0 +1,55 @@
+# Portrait (480x800): the board stands on end on its stand. Run with --portrait
+# (tests/test_sim.py runs portrait*.txt that way).
+clock=2026-10-13 07:40
+advance=600
+screenshot=p01-idle.png
+expect_screen=idle
+
+list_date=Tuesday, October 13
+set_list_file=day.json
+set_ongoing=[{"id":"vpop-agent","label":"Build the VPOP survey-question agent","source":"manual"},{"id":"coreml-russ","label":"Train the CoreML models","source":"manual"}]
+message=Good morning — nine things today, and the ongoing ones when you can.
+advance=1000
+screenshot=p02-list.png
+expect_screen=list
+
+online=false
+tap=row:rosary@2026-10-07
+advance=1200
+screenshot=p03-undo-dance.png
+expect_state=rosary@2026-10-07 undo
+
+# Scroll to the bottom: the last ongoing task comes into view.
+drag=240,600,240,200
+advance=800
+drag=240,600,240,200
+advance=800
+drag=240,600,240,200
+advance=1500
+expect_visible=row:coreml-russ
+screenshot=p04-scrolled.png
+
+tap=add
+type=Water the plants
+advance=200
+screenshot=p05-add-sheet.png
+tap=sheet_cancel
+expect_sheet=closed
+
+# Finish the day: the celebration, then all-done on top and the ongoing tasks below.
+set_list=[{"id":"a@2026-10-13","label":"Vitamins PM","source":"manual"}]
+advance=300
+tap=row:a@2026-10-13
+advance=5200
+expect_screen=celebrate
+advance=700
+screenshot=p06-celebrate.png
+advance=2000
+expect_screen=all_done
+expect_visible=row:vpop-agent
+screenshot=p07-all-done-split.png
+
+# With no ongoing tasks left, all-done takes the whole screen again.
+set_ongoing=[]
+advance=800
+screenshot=p08-all-done.png

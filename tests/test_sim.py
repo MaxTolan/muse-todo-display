@@ -41,13 +41,15 @@ def main():
 
     all_shots = {}
     for scenario in scenarios:
+        # portrait*.txt are written for the 480x800 portrait screen.
+        size = ("--portrait",) if scenario.name.startswith("portrait") else ()
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
-            first = run(args.binary, scenario, pathlib.Path(a))
-            second = run(args.binary, scenario, pathlib.Path(b))
+            first = run(args.binary, scenario, pathlib.Path(a), *size)
+            second = run(args.binary, scenario, pathlib.Path(b), *size)
         # Again the way the firmware hosts the screen (inside the SDK's tileview):
         # every expectation must hold there too.
         with tempfile.TemporaryDirectory() as c:
-            run(args.binary, scenario, pathlib.Path(c), "--sdk-layout")
+            run(args.binary, scenario, pathlib.Path(c), "--sdk-layout", *size)
         if first != second:
             diff = sorted(k for k in first if first.get(k) != second.get(k))
             raise SystemExit(f"FAIL {scenario.name}: screenshots differ between runs: {diff}")

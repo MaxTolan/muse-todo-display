@@ -23,7 +23,21 @@ for logic/states, or `MUSE_BENCH=1` builds with `tools/muse/snap.py` once the bo
 Show previews of each state (open list, undo window, crossed out/sending, message bar,
 all done, idle) before calling UI work done.
 
-## Screen layout (800x480 landscape)
+## Orientation (owner, Oct 13)
+
+The board stands in **portrait** on its stand, turned clockwise from landscape, and the whole
+device is rotated (todo screen, settings, pairing, avatar): LVGL draws a 480x800 screen and the
+LCD-5 port turns it into the 800x480 panel (`CONFIG_MUSE_LCD5_ROTATION=90` in
+`firmware/sdkconfig.todo`; 0 = landscape, 270 = counter-clockwise). The todo screen lays itself
+out for whichever size it gets; in portrait:
+
+- the top bar has two rows (date and +, then the time and the progress pill);
+- the idle and all-done screens stack Muse above the words;
+- the add-task keyboard is taller, with bigger keys.
+
+Previews: `docs/previews/p*.png` and `contact-sheet-portrait.png` (simulator `--portrait`).
+
+## Screen layout (landscape, 800x480; portrait adapts it as above)
 
 - **Top bar:** current day/date and a small count ("5 of 9 done"). Time comes from SNTP,
   time zone America/Chicago.
@@ -104,8 +118,9 @@ marks them.
   when Muse replies.
 - They are not part of the day: "N of M done" counts only today's list, and finishing today's
   list celebrates even if ongoing tasks are still open (owner, Oct 12). After the celebration,
-  if ongoing tasks remain, the list stays up with an "All done!" banner at the top and the
-  ongoing section below it, instead of the full all-done screen.
+  if ongoing tasks remain, the screen splits (owner, Oct 13): the all-done view (a smaller Muse,
+  "All done!", the day's count) takes the **top half** and the ongoing section the **bottom
+  half**, scrollable. With none left, all-done takes the whole screen.
 - With no daily list yet but ongoing tasks present, the list shows (just the ongoing section)
   instead of "waiting for today's list".
 - The dancer steps left of a visible Undo button rather than covering it.

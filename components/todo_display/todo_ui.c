@@ -21,8 +21,10 @@
 #define TODO_EXT_BSS
 #endif
 
-#define SCREEN_W 800
-#define SCREEN_H 480
+/* Screen size: taken from the parent in todo_ui_create (800x480 landscape, or
+ * 480x800 when the board stands in portrait). */
+#define SCREEN_W (s.w)
+#define SCREEN_H (s.h)
 
 /* Palette. */
 #define C_BG 0x2b1a2f
@@ -37,7 +39,7 @@
 #define C_BUTTER 0xffe08a
 #define C_PLUM_TEXT 0x3b1f3f
 
-#define TOP_H 84
+#define TOP_H (s.top_h) /* 84 landscape; two rows (128) in portrait */
 #define ROW_MIN_H 80
 #define CHECK_PX 52
 #define SQUISH_MS 320u
@@ -81,6 +83,8 @@ typedef struct {
 } row_t;
 
 static TODO_EXT_BSS struct {
+    int32_t w, h, top_h;
+    bool portrait;
     todo_model_t *model;
     uint32_t now;
     uint32_t seq;
@@ -130,8 +134,9 @@ static TODO_EXT_BSS struct {
     lv_obj_t *sheet_ongoing_label;
     bool sheet_ongoing_on;
     lv_obj_t *ongoing_hdr;         /* "Ongoing" section header in the list */
-    lv_obj_t *done_banner;         /* "All done!" atop the list when ongoing tasks remain */
-    lv_obj_t *done_banner_sub;
+    lv_obj_t *done_col;            /* the all-done words */
+    lv_obj_t *done_muse_small;     /* Muse in the split all-done view */
+    int split;                     /* -1 unset, 0 full all-done / list, 1 split */
     lv_obj_t *sheet_add;
     lv_obj_t *sheet_cancel;
     bool sheet_open;
@@ -583,9 +588,9 @@ static void place(lv_obj_t *obj, uint32_t *index)
 }
 
 /*
- * Rows in list order: [all-done banner] today's items, then the "Ongoing"
- * header and the ongoing tasks. done_mode: the day is finished but ongoing
- * tasks remain, so the banner shows and today's rows stay out of the way.
+ * Rows in list order: today's items, then the "Ongoing" header and the
+ * ongoing tasks. done_mode: the day is finished but ongoing tasks remain, so
+ * the list holds just the ongoing section (under the split all-done view).
  */
 static void sync_rows(bool done_mode)
 {
@@ -602,8 +607,6 @@ static void sync_rows(bool done_mode)
         }
     }
     uint32_t index = 0;
-    show(s.done_banner, done_mode);
-    place(s.done_banner, &index);
     for (int pass = 0; pass < 2; pass++) {
         bool ongoing = pass == 1;
         if (ongoing) {
@@ -639,15 +642,6 @@ static void sync_rows(bool done_mode)
 
 static void build_list_extras(void)
 {
-    s.done_banner = box(s.list);
-    lv_obj_set_size(s.done_banner, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_ver(s.done_banner, 6, 0);
-    lv_obj_set_flex_flow(s.done_banner, LV_FLEX_FLOW_COLUMN);
-    lv_obj_t *title = text(s.done_banner, todo_font(40), C_BUTTER);
-    lv_label_set_text(title, "All done!");
-    s.done_banner_sub = text(s.done_banner, todo_font(20), C_CREAM);
-    show(s.done_banner, false);
-
     s.ongoing_hdr = box(s.list);
     lv_obj_set_size(s.ongoing_hdr, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_style_pad_top(s.ongoing_hdr, 10, 0);
@@ -668,11 +662,16 @@ static void build_top(void)
     s.date = text(s.top, todo_font(28), C_CREAM);
     lv_obj_align(s.date, LV_ALIGN_TOP_LEFT, 0, 14);
     s.clock = text(s.top, todo_font(20), C_MUTED);
-    lv_obj_align(s.clock, LV_ALIGN_TOP_LEFT, 0, 50);
+    lv_obj_align(s.clock, LV_ALIGN_TOP_LEFT, 0, s.portrait ? 76 : 50);
 
     s.pill = box(s.top);
     lv_obj_set_size(s.pill, 200, 48);
-    lv_obj_align(s.pill, LV_ALIGN_RIGHT_MID, -(ADD_BTN_W + 12), 2);
+    if (s.portrait) {
+        /* Two rows: date and +, then the time and the progress pill. */
+        lv_obj_align(s.pill, LV_ALIGN_BOTTOM_RIGHT, 0, -10);
+    } else {
+        lv_obj_align(s.pill, LV_ALIGN_RIGHT_MID, -(ADD_BTN_W + 12), 2);
+    }
     lv_obj_set_style_radius(s.pill, 24, 0);
     lv_obj_set_style_bg_opa(s.pill, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(s.pill, col(C_CARD), 0);
@@ -687,7 +686,7 @@ static void build_top(void)
     /* Muse peeks up from behind the bottom edge of this little window. */
     s.peek_box = box(s.top);
     lv_obj_set_size(s.peek_box, 112, TOP_H);
-    lv_obj_align(s.peek_box, LV_ALIGN_RIGHT_MID, -(208 + ADD_BTN_W + 12), 0);
+    lv_obj_align(s.peek_box, LV_ALIGN_RIGHT_MID, s.portrait ? -208 : -(208 + ADD_BTN_W + 12), 0);
     s.peek_muse = todo_mascot_create(s.peek_box, 128);
     lv_obj_set_pos(s.peek_muse, -8, TOP_H);
 }
@@ -700,11 +699,18 @@ static void build_idle(lv_obj_t *parent)
     lv_obj_set_style_bg_color(s.idle, col(C_BG), 0);
 
     s.idle_muse = todo_mascot_create(s.idle, 256);
-    lv_obj_align(s.idle_muse, LV_ALIGN_LEFT_MID, 64, -4);
-
     lv_obj_t *col_box = box(s.idle);
     lv_obj_set_size(col_box, 420, LV_SIZE_CONTENT);
-    lv_obj_align(col_box, LV_ALIGN_LEFT_MID, 350, 0);
+    if (s.portrait) {
+        /* Muse above, the words centred below. */
+        lv_obj_align(s.idle_muse, LV_ALIGN_TOP_MID, 0, 90);
+        lv_obj_align(col_box, LV_ALIGN_TOP_MID, 0, 400);
+        lv_obj_set_flex_align(col_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_text_align(col_box, LV_TEXT_ALIGN_CENTER, 0);
+    } else {
+        lv_obj_align(s.idle_muse, LV_ALIGN_LEFT_MID, 64, -4);
+        lv_obj_align(col_box, LV_ALIGN_LEFT_MID, 350, 0);
+    }
     lv_obj_set_flex_flow(col_box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(col_box, 6, 0);
     s.idle_time = text(col_box, todo_font(48), C_CREAM);
@@ -726,11 +732,19 @@ static void build_done(void)
     lv_obj_add_flag(s.done, LV_OBJ_FLAG_IGNORE_LAYOUT);
 
     s.done_muse = todo_mascot_create(s.done, 256);
-    lv_obj_align(s.done_muse, LV_ALIGN_LEFT_MID, 70, -10);
-
-    lv_obj_t *col_box = box(s.done);
+    s.done_muse_small = todo_mascot_create(s.done, 128);
+    show(s.done_muse_small, false);
+    lv_obj_t *col_box = s.done_col = box(s.done);
     lv_obj_set_size(col_box, 400, LV_SIZE_CONTENT);
-    lv_obj_align(col_box, LV_ALIGN_LEFT_MID, 360, -10);
+    if (s.portrait) {
+        lv_obj_align(s.done_muse, LV_ALIGN_TOP_MID, 0, 40);
+        lv_obj_align(col_box, LV_ALIGN_TOP_MID, 0, 340);
+        lv_obj_set_flex_align(col_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_text_align(col_box, LV_TEXT_ALIGN_CENTER, 0);
+    } else {
+        lv_obj_align(s.done_muse, LV_ALIGN_LEFT_MID, 70, -10);
+        lv_obj_align(col_box, LV_ALIGN_LEFT_MID, 360, -10);
+    }
     lv_obj_set_flex_flow(col_box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(col_box, 8, 0);
     s.done_title = text(col_box, todo_font(48), C_BUTTER);
@@ -926,7 +940,7 @@ static void build_add(lv_obj_t *parent)
     /* The + lives at the top right on every screen; it opens the sheet. */
     s.add_btn = box(parent);
     lv_obj_set_size(s.add_btn, ADD_BTN_W, 48);
-    lv_obj_set_pos(s.add_btn, SCREEN_W - 28 - ADD_BTN_W, (TOP_H - 48) / 2 + 2);
+    lv_obj_set_pos(s.add_btn, SCREEN_W - 28 - ADD_BTN_W, s.portrait ? 12 : (TOP_H - 48) / 2 + 2);
     lv_obj_set_style_radius(s.add_btn, 24, 0);
     lv_obj_set_style_bg_opa(s.add_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(s.add_btn, col(C_PINK), 0);
@@ -949,11 +963,12 @@ static void build_add(lv_obj_t *parent)
     lv_label_set_text(title, "Add a task");
     lv_obj_set_pos(title, 28, 26);
 
-    s.sheet_cancel = pill_button(s.sheet, "Cancel", C_CARD, C_CREAM, 140);
-    lv_obj_set_pos(s.sheet_cancel, SCREEN_W - 28 - 140 - 12 - 140, 14);
+    int32_t btn_w = s.portrait ? 112 : 140, edge = s.portrait ? 24 : 28, gap = s.portrait ? 10 : 12;
+    s.sheet_cancel = pill_button(s.sheet, "Cancel", C_CARD, C_CREAM, btn_w);
+    lv_obj_set_pos(s.sheet_cancel, SCREEN_W - edge - btn_w - gap - btn_w, 14);
     lv_obj_add_event_cb(s.sheet_cancel, sheet_cancel_clicked, LV_EVENT_CLICKED, NULL);
-    s.sheet_add = pill_button(s.sheet, "Add", C_PINK, C_PLUM_TEXT, 140);
-    lv_obj_set_pos(s.sheet_add, SCREEN_W - 28 - 140, 14);
+    s.sheet_add = pill_button(s.sheet, "Add", C_PINK, C_PLUM_TEXT, btn_w);
+    lv_obj_set_pos(s.sheet_add, SCREEN_W - edge - btn_w, 14);
     lv_obj_add_event_cb(s.sheet_add, sheet_add_clicked, LV_EVENT_CLICKED, NULL);
 
     s.sheet_ta = lv_textarea_create(s.sheet);
@@ -993,7 +1008,7 @@ static void build_add(lv_obj_t *parent)
     lv_obj_set_pos(s.sheet_err, 32, 166);
 
     s.sheet_kb = lv_keyboard_create(s.sheet);
-    lv_obj_set_size(s.sheet_kb, SCREEN_W, 276);
+    lv_obj_set_size(s.sheet_kb, SCREEN_W, s.portrait ? 460 : 276); /* portrait: room for bigger keys */
     lv_obj_align(s.sheet_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_keyboard_set_textarea(s.sheet_kb, s.sheet_ta);
     lv_obj_set_style_bg_color(s.sheet_kb, col(C_BG), 0);
@@ -1037,7 +1052,17 @@ void todo_ui_create(lv_obj_t *parent, todo_model_t *model)
 {
     memset(&s, 0, sizeof(s));
     s.model = model;
+    lv_obj_update_layout(parent);
+    s.w = lv_obj_get_width(parent);
+    s.h = lv_obj_get_height(parent);
+    if (s.w <= 0 || s.h <= 0) {
+        s.w = 800;
+        s.h = 480;
+    }
+    s.portrait = s.h > s.w;
+    s.top_h = s.portrait ? 128 : 84;
     s.screen = -1;
+    s.split = -1;
     s.mascot_ms = UINT32_MAX;
 
     lv_obj_set_style_bg_color(parent, col(C_BG), 0);
@@ -1154,6 +1179,41 @@ static void update_bar(bool draw)
     }
 }
 
+/*
+ * The day is done but ongoing tasks remain: the all-done view takes the top
+ * half (a smaller Muse beside or above the words) and the list, holding just
+ * the ongoing section, the bottom half (owner, Oct 13). Only re-lays out when
+ * the mode changes.
+ */
+static void set_split(bool split)
+{
+    if (s.split == (int)split) {
+        return;
+    }
+    s.split = split;
+    lv_obj_update_layout(s.main);
+    int32_t h = lv_obj_get_content_height(s.main);
+    int32_t half = h / 2;
+    show(s.done_muse, !split);
+    show(s.done_muse_small, split);
+    lv_obj_set_height(s.done, split ? half : lv_pct(100));
+    lv_obj_set_pos(s.list, 0, split ? half : 0);
+    lv_obj_set_height(s.list, split ? h - half : lv_pct(100));
+    if (split) {
+        if (s.portrait) {
+            lv_obj_align(s.done_muse_small, LV_ALIGN_TOP_MID, 0, 14);
+            lv_obj_align(s.done_col, LV_ALIGN_TOP_MID, 0, 166);
+        } else {
+            lv_obj_align(s.done_muse_small, LV_ALIGN_LEFT_MID, 150, 0);
+            lv_obj_align(s.done_col, LV_ALIGN_LEFT_MID, 310, 0);
+        }
+    } else if (s.portrait) {
+        lv_obj_align(s.done_col, LV_ALIGN_TOP_MID, 0, 340);
+    } else {
+        lv_obj_align(s.done_col, LV_ALIGN_LEFT_MID, 360, -10);
+    }
+}
+
 static void update_done(bool draw)
 {
     int done, total;
@@ -1178,7 +1238,7 @@ static void update_done(bool draw)
     show(s.done_note, pending > 0);
     if (draw) {
         todo_mascot_pose_t pose = { .t = s.now / 1000.0f, .happy = 0.35f };
-        todo_mascot_draw(s.done_muse, &pose);
+        todo_mascot_draw(s.split == 1 ? s.done_muse_small : s.done_muse, &pose);
     }
 }
 
@@ -1287,7 +1347,8 @@ void todo_ui_update(uint32_t now_ms)
     bool done_mode = screen == TODO_SCREEN_ALL_DONE && todo_model_ongoing_visible(s.model) > 0;
     show(s.idle, screen == TODO_SCREEN_IDLE);
     show(s.list, screen == TODO_SCREEN_LIST || done_mode);
-    show(s.done, screen == TODO_SCREEN_ALL_DONE && !done_mode);
+    show(s.done, screen == TODO_SCREEN_ALL_DONE);
+    set_split(done_mode);
     show(s.party, screen == TODO_SCREEN_CELEBRATE);
     if (s.sheet_open && since(s.sheet_ms) >= SHEET_IDLE_MS) {
         sheet_close(true); /* walked away: hide it, keep what was typed */
@@ -1311,19 +1372,7 @@ void todo_ui_update(uint32_t now_ms)
     case TODO_SCREEN_LIST:
         break;
     case TODO_SCREEN_ALL_DONE:
-        if (done_mode) {
-            int done, total;
-            char buf[64];
-            todo_model_progress(s.model, &done, &total);
-            if (total) {
-                snprintf(buf, sizeof(buf), "%d of %d today. The ongoing ones can wait.", done, total);
-            } else {
-                snprintf(buf, sizeof(buf), "Nothing on today's list.");
-            }
-            set_text(s.done_banner_sub, buf);
-        } else {
-            update_done(draw);
-        }
+        update_done(draw);
         break;
     case TODO_SCREEN_CELEBRATE:
         update_party(draw);

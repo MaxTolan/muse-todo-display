@@ -25,8 +25,10 @@
 #include "todo_model.h"
 #include "todo_ui.h"
 
-#define SCREEN_W 800
-#define SCREEN_H 480
+/* 800x480 landscape, or 480x800 with --portrait (the board on its stand). */
+static int s_screen_w = 800, s_screen_h = 480;
+#define SCREEN_W s_screen_w
+#define SCREEN_H s_screen_h
 #define FRAME_STEP_MS 10u
 #define TAP_HOLD_MS 80u
 
@@ -743,7 +745,7 @@ static void on_signal(int sig)
 static void usage(const char *argv0)
 {
     fprintf(stderr,
-            "Usage: %s [--headless] [--scenario FILE] [--out DIR] [--run-ms N]\n"
+            "Usage: %s [--headless] [--portrait] [--sdk-layout] [--scenario FILE] [--out DIR] [--run-ms N]\n"
             "          [--screenshot FILE.png] [--state FILE]\n"
             "Keys: L load sample list, O toggle online, R Muse replies, E turn error,\n"
             "      M message, K peek, P screenshot, Esc quit. The mouse is your finger.\n",
@@ -766,6 +768,9 @@ int main(int argc, char **argv)
             shot = argv[++i];
         } else if (!strcmp(argv[i], "--run-ms") && i + 1 < argc) {
             run_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
+        } else if (!strcmp(argv[i], "--portrait")) {
+            s_screen_w = 480;
+            s_screen_h = 800;
         } else if (!strcmp(argv[i], "--sdk-layout")) {
             s_sdk_layout = true;
         } else if (!strcmp(argv[i], "--state") && i + 1 < argc) {
@@ -803,7 +808,8 @@ int main(int argc, char **argv)
     }
     /* After the window: LVGL's SDL driver installs its own real-time tick. */
     lv_tick_set_cb(tick_cb);
-    lv_sdl_window_set_title(g.display, "Muse Todo Display (800x480)");
+    lv_sdl_window_set_title(g.display, SCREEN_W > SCREEN_H ? "Muse Todo Display (800x480)"
+                                                           : "Muse Todo Display (480x800 portrait)");
     lv_sdl_window_set_resizeable(g.display, false);
     lv_display_add_event_cb(g.display, invalidate_cb, LV_EVENT_INVALIDATE_AREA, NULL);
     lv_indev_t *mouse = lv_sdl_mouse_create();

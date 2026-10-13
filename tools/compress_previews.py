@@ -60,25 +60,28 @@ def main():
     for old in dst.glob("*.png"):
         old.unlink()
     shots = sorted(src.glob("*.png"))
-    thumbs = []
+    groups = {}
     for shot in shots:
         w, h, rows = read_png(shot)
         write_png(dst / shot.name, w, h, rows)
-        thumbs.append(half(w, h, rows))
+        groups.setdefault("portrait" if h > w else "landscape", []).append(half(w, h, rows))
 
-    cols, gap = 3, 8
-    tw, th = thumbs[0][0], thumbs[0][1]
-    nrows = (len(thumbs) + cols - 1) // cols
-    sw, sh = cols * tw + (cols + 1) * gap, nrows * th + (nrows + 1) * gap
-    bg = bytes([18, 12, 20])
-    sheet = [bytearray(bg * sw) for _ in range(sh)]
-    for k, (_, _, rows) in enumerate(thumbs):
-        ox = gap + (k % cols) * (tw + gap)
-        oy = gap + (k // cols) * (th + gap)
-        for y, r in enumerate(rows):
-            sheet[oy + y][ox * 3 : ox * 3 + len(r)] = r
-    write_png(dst / "contact-sheet.png", sw, sh, [bytes(r) for r in sheet])
-    print(f"{len(shots)} previews + contact sheet -> {dst}")
+    # One contact sheet per orientation (thumbnails in a sheet must share a size).
+    for kind, thumbs in groups.items():
+        cols, gap = (3, 8) if kind == "landscape" else (5, 8)
+        tw, th = thumbs[0][0], thumbs[0][1]
+        nrows = (len(thumbs) + cols - 1) // cols
+        sw, sh = cols * tw + (cols + 1) * gap, nrows * th + (nrows + 1) * gap
+        bg = bytes([18, 12, 20])
+        sheet = [bytearray(bg * sw) for _ in range(sh)]
+        for k, (_, _, rows) in enumerate(thumbs):
+            ox = gap + (k % cols) * (tw + gap)
+            oy = gap + (k // cols) * (th + gap)
+            for y, r in enumerate(rows):
+                sheet[oy + y][ox * 3 : ox * 3 + len(r)] = r
+        name = "contact-sheet.png" if kind == "landscape" else "contact-sheet-portrait.png"
+        write_png(dst / name, sw, sh, [bytes(r) for r in sheet])
+    print(f"{len(shots)} previews + contact sheets -> {dst}")
 
 
 if __name__ == "__main__":

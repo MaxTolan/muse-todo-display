@@ -34,6 +34,9 @@ Keys in the window:
 | P | Save `todo-sim.png` |
 | Esc | Quit |
 
+`--portrait` makes the window 480x800 (the board standing on end); scenarios named
+`portrait*.txt` are written for it, and `tests/test_sim.py` runs them that way.
+
 `--sdk-layout` hosts the screen the way the firmware does: on the face tile of a tileview with a
 settings tile beside it (the SDK's `muse_ui.c`). `tests/test_sim.py` runs every scenario in
 both layouts.

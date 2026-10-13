@@ -37,6 +37,7 @@ expect_screen=celebrate
 advance=2200
 expect_screen=all_done
 advance=2000
+expect_visible=row:vpop-agent
 screenshot=28-all-done-with-ongoing.png
 
 # Asking Muse for a new ongoing task from the device.
