@@ -30,6 +30,17 @@ void todo_ui_update(uint32_t now_ms);
  */
 void todo_ui_set_idle_hint(const char *hint);
 
+/* Wi-Fi as the little icon by the clock shows it. */
+typedef enum {
+    TODO_WIFI_UNKNOWN,    /* not reported: no icon */
+    TODO_WIFI_NONE,       /* off, nothing saved, not nearby, or joining failed: peach */
+    TODO_WIFI_CONNECTING, /* blinking */
+    TODO_WIFI_CONNECTED,  /* mint */
+} todo_wifi_t;
+
+/* Update the Wi-Fi icon (cheap to call every frame). */
+void todo_ui_set_wifi(todo_wifi_t state);
+
 /* Have the little top-hat Muse peek in from the top bar for a few seconds. */
 void todo_ui_peek(uint32_t now_ms);
 

@@ -35,6 +35,7 @@
 #include "muse_ext.h"
 #include "muse_link.h"
 #include "muse_settings.h"
+#include "muse_wifi.h"
 
 #include "todo_model.h"
 #include "todo_ui.h"
@@ -448,6 +449,11 @@ static void frame(lv_timer_t *t)
     }
     if (visible) {
         update_hint();
+        muse_wifi_status_t w;
+        muse_wifi_status(&w);
+        todo_ui_set_wifi(w.state == MUSE_WIFI_CONNECTED    ? TODO_WIFI_CONNECTED
+                         : w.state == MUSE_WIFI_CONNECTING ? TODO_WIFI_CONNECTING
+                                                           : TODO_WIFI_NONE);
         todo_ui_update(now);
     }
 }

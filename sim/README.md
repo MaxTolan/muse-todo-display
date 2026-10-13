@@ -31,6 +31,7 @@ Keys in the window:
 | R / E | Muse replies to / fails the turn in flight (it also auto-replies after 1.5 s) |
 | M | Muse sends a message |
 | K | Muse peeks in |
+| W | Cycle the Wi-Fi icon (connected, connecting, none) |
 | P | Save `todo-sim.png` |
 | Esc | Quit |
 
@@ -53,6 +54,7 @@ clock (fixed to 2026-10-07 09:14 America/Chicago unless `clock=` sets it).
 | --- | --- |
 | `clock` | `2026-10-07 07:02` (local time) |
 | `online`, `refuse_turns` | `true` / `false` |
+| `wifi` | The Wi-Fi icon: `connected` (default), `connecting`, `none`, `unknown` (no icon) |
 | `list_date` | Date text for the next push |
 | `set_list` / `set_list_file` | `todo.set_list` items: inline JSON, or a file next to the scenario |
 | `set_ongoing` / `set_ongoing_file` | `todo.set_ongoing` items (the ongoing tasks), same forms |

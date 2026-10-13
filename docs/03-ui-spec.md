@@ -39,7 +39,9 @@ Previews: `docs/previews/p*.png` and `contact-sheet-portrait.png` (simulator `--
 
 ## Screen layout (landscape, 800x480; portrait adapts it as above)
 
-- **Top bar:** current day/date and a small count ("5 of 9 done"). Time comes from SNTP,
+- **Top bar:** current day/date and a small count ("5 of 9 done"). A small Wi-Fi icon sits beside the
+  time (and beside the date on the idle screen): mint when connected, blinking while
+  connecting, peach with no Wi-Fi (owner, Oct 13). Time comes from SNTP,
   time zone America/Chicago.
 - **Main area:** scrollable checklist. Each row: a large checkbox on the left, the item label
   in large type. Items from a non-manual source show a small tag with the source (e.g. "auto"

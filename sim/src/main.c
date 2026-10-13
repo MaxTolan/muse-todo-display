@@ -368,6 +368,7 @@ static void reboot(void)
         free(blob);
     }
     todo_ui_create(ui_parent(), &g.model);
+    todo_ui_set_wifi(TODO_WIFI_CONNECTED);
 }
 
 /* "2026-10-07 09:14" in America/Chicago. */
@@ -492,6 +493,16 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
 
         if (!strcmp(k, "clock")) {
             ok = set_clock(v);
+        } else if (!strcmp(k, "wifi")) {
+            todo_wifi_t w = !strcmp(v, "connected")    ? TODO_WIFI_CONNECTED
+                          : !strcmp(v, "connecting")   ? TODO_WIFI_CONNECTING
+                          : !strcmp(v, "none")         ? TODO_WIFI_NONE
+                          : !strcmp(v, "unknown")      ? TODO_WIFI_UNKNOWN
+                                                       : (todo_wifi_t)-1;
+            ok = w != (todo_wifi_t)-1;
+            if (ok) {
+                todo_ui_set_wifi(w);
+            }
         } else if (!strcmp(k, "online")) {
             ok = parse_bool(v, &b);
             g.online = b;
@@ -724,6 +735,13 @@ static int event_watch(void *userdata, SDL_Event *e)
     case SDLK_k:
         todo_ui_peek(g.now_ms);
         break;
+    case SDLK_w: {
+        static int w = TODO_WIFI_CONNECTED;
+        w = w == TODO_WIFI_CONNECTED ? TODO_WIFI_CONNECTING : w == TODO_WIFI_CONNECTING ? TODO_WIFI_NONE
+                                                                                     : TODO_WIFI_CONNECTED;
+        todo_ui_set_wifi((todo_wifi_t)w);
+        break;
+    }
     case SDLK_p:
         screenshot("todo-sim.png");
         break;
@@ -829,6 +847,7 @@ int main(int argc, char **argv)
         }
     }
     todo_ui_create(ui_parent(), &g.model);
+    todo_ui_set_wifi(TODO_WIFI_CONNECTED); /* scenarios change it with wifi= */
     SDL_AddEventWatch(event_watch, NULL);
 
     bool ok = true;

@@ -1,0 +1,19 @@
+# The Wi-Fi icon by the clock (and by the date on the idle screen).
+clock=2026-10-13 18:20
+wifi=none
+advance=300
+screenshot=33-wifi-none-idle.png
+list_date=Tuesday, October 13
+set_list=[{"id":"a@2026-10-13","label":"Vitamins PM","source":"manual"},{"id":"b@2026-10-13","label":"PT exercises","source":"manual"}]
+advance=300
+screenshot=34-wifi-none.png
+wifi=connecting
+advance=300
+screenshot=35-wifi-connecting.png
+# Connected: the icon is still, so a still list still redraws nothing.
+wifi=connected
+advance=500
+screenshot=36-wifi-connected.png
+redraw_reset=1
+advance=3000
+expect_redraw_max=0

@@ -109,6 +109,9 @@ static TODO_EXT_BSS struct {
     lv_obj_t *idle_muse;
     lv_obj_t *idle_time;
     lv_obj_t *idle_date;
+    lv_obj_t *wifi_top;   /* Wi-Fi icon beside the clock */
+    lv_obj_t *wifi_idle;  /* and beside the date on the idle screen */
+    todo_wifi_t wifi;
     lv_obj_t *idle_sub;
 
     lv_obj_t *done;
@@ -661,8 +664,16 @@ static void build_top(void)
 
     s.date = text(s.top, todo_font(28), C_CREAM);
     lv_obj_align(s.date, LV_ALIGN_TOP_LEFT, 0, 14);
-    s.clock = text(s.top, todo_font(20), C_MUTED);
-    lv_obj_align(s.clock, LV_ALIGN_TOP_LEFT, 0, s.portrait ? 76 : 50);
+    lv_obj_t *clock_row = box(s.top);
+    lv_obj_set_size(clock_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(clock_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(clock_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(clock_row, 10, 0);
+    lv_obj_align(clock_row, LV_ALIGN_TOP_LEFT, 0, s.portrait ? 76 : 50);
+    s.clock = text(clock_row, todo_font(20), C_MUTED);
+    s.wifi_top = text(clock_row, todo_font(16), C_MUTED);
+    lv_label_set_text(s.wifi_top, LV_SYMBOL_WIFI);
+    show(s.wifi_top, false);
 
     s.pill = box(s.top);
     lv_obj_set_size(s.pill, 200, 48);
@@ -714,7 +725,15 @@ static void build_idle(lv_obj_t *parent)
     lv_obj_set_flex_flow(col_box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(col_box, 6, 0);
     s.idle_time = text(col_box, todo_font(48), C_CREAM);
-    s.idle_date = text(col_box, todo_font(24), C_MUTED);
+    lv_obj_t *date_row = box(col_box);
+    lv_obj_set_size(date_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(date_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(date_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(date_row, 12, 0);
+    s.idle_date = text(date_row, todo_font(24), C_MUTED);
+    s.wifi_idle = text(date_row, todo_font(20), C_MUTED);
+    lv_label_set_text(s.wifi_idle, LV_SYMBOL_WIFI);
+    show(s.wifi_idle, false);
     lv_obj_t *gap = box(col_box);
     lv_obj_set_size(gap, 1, 18);
     lv_obj_t *wait = text(col_box, todo_font(32), C_PINK);
@@ -1318,6 +1337,26 @@ static void update_dancer(todo_screen_t screen, bool draw)
     }
 }
 
+void todo_ui_set_wifi(todo_wifi_t state)
+{
+    s.wifi = state;
+}
+
+/* Colour says the state; connecting blinks (only the tiny icon redraws). */
+static void update_wifi(void)
+{
+    lv_obj_t *icons[] = { s.wifi_top, s.wifi_idle };
+    uint32_t color = s.wifi == TODO_WIFI_CONNECTED ? C_MINT : s.wifi == TODO_WIFI_NONE ? C_PEACH : C_MUTED;
+    lv_opa_t opa = s.wifi == TODO_WIFI_CONNECTING && (s.now / 600) % 2 ? LV_OPA_30 : LV_OPA_COVER;
+    for (int i = 0; i < 2; i++) {
+        show(icons[i], s.wifi != TODO_WIFI_UNKNOWN);
+        if (!lv_color_eq(lv_obj_get_style_text_color(icons[i], LV_PART_MAIN), col(color))) {
+            lv_obj_set_style_text_color(icons[i], col(color), 0);
+        }
+        set_opa(icons[i], opa);
+    }
+}
+
 void todo_ui_set_idle_hint(const char *hint)
 {
     set_text(s.idle_sub, hint && hint[0] ? hint : "Muse will send it over soon.");
@@ -1343,6 +1382,7 @@ void todo_ui_update(uint32_t now_ms)
     }
 
     update_top(screen);
+    update_wifi();
     /* Day finished but ongoing tasks remain: keep them on screen under a banner. */
     bool done_mode = screen == TODO_SCREEN_ALL_DONE && todo_model_ongoing_visible(s.model) > 0;
     show(s.idle, screen == TODO_SCREEN_IDLE);
