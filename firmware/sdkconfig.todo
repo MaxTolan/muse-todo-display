@@ -11,6 +11,11 @@ CONFIG_LV_FONT_MONTSERRAT_32=y
 CONFIG_LV_FONT_MONTSERRAT_40=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
 
+# Characters beyond ASCII (em dashes, curly quotes, accented letters...):
+# a Montserrat subset rendered by TinyTTF as the built-in fonts' fallback
+# (components/todo_display/todo_fonts.c).
+CONFIG_LV_USE_TINY_TTF=y
+
 # The add-task sheet (issue #2). LVGL enables these by default; say so
 # explicitly so an SDK change can't drop them.
 CONFIG_LV_USE_KEYBOARD=y

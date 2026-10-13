@@ -134,6 +134,8 @@ add_executable(todo_sim
     src/png_write.c
     "${TODO_COMPONENT_DIR}/todo_ui.c"
     "${TODO_COMPONENT_DIR}/todo_mascot.c"
+    "${TODO_COMPONENT_DIR}/todo_fonts.c"
+    "${TODO_COMPONENT_DIR}/todo_font_extra.c"
     "${SDK_ESP32_DIR}/avatar/muse_pixel.c"
 )
 target_include_directories(todo_sim PRIVATE

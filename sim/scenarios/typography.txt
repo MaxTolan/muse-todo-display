@@ -1,0 +1,15 @@
+# Text beyond ASCII renders: Muse writes em dashes, curly quotes and ellipses,
+# and labels can have accented letters. The built-in fonts stop at ASCII;
+# todo_fonts.c adds a Montserrat fallback for the rest.
+clock=2026-10-13 09:00
+list_date=Tuesday, October 13 — week 42
+set_list=[{"id":"mom@2026-10-13","label":"Call Mom — about Sunday’s “café” plans…","source":"manual"},{"id":"pay@2026-10-13","label":"Pay José €45 • split the 3½ lb order","source":"manual"},{"id":"temp@2026-10-13","label":"Check the oven: 350°F → 175°C","source":"manual"}]
+message=Nice work today — you’re on a roll… “one more” and you’re done!
+advance=800
+screenshot=32-typography.png
+expect_renders=Call Mom — about Sunday’s “café” plans…
+expect_renders=Pay José €45 • split the 3½ lb order
+expect_renders=Nice work today — you’re on a roll… “one more” and you’re done!
+expect_renders=Zürich – Łódź – Ærø – ñandú – ¿qué? ¡sí!
+# Emoji are out of scope (no colour glyphs); they stay unrendered.
+expect_not_renders=Done 🎉

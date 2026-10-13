@@ -11,6 +11,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "todo_fonts.h"
 #include "todo_mascot.h"
 
 #ifdef ESP_PLATFORM
@@ -370,11 +371,11 @@ static row_t *row_create(const todo_item_t *it)
     lv_obj_set_style_bg_opa(r->check, LV_OPA_COVER, 0);
     lv_obj_set_style_transform_pivot_x(r->check, CHECK_PX / 2, 0);
     lv_obj_set_style_transform_pivot_y(r->check, CHECK_PX / 2, 0);
-    r->check_icon = text(r->check, &lv_font_montserrat_28, C_PLUM_TEXT);
+    r->check_icon = text(r->check, todo_font(28), C_PLUM_TEXT);
     lv_label_set_text(r->check_icon, LV_SYMBOL_OK);
     lv_obj_center(r->check_icon);
 
-    const lv_font_t *font = r->ongoing ? &lv_font_montserrat_24 : &lv_font_montserrat_28;
+    const lv_font_t *font = r->ongoing ? todo_font(24) : todo_font(28);
     r->label = text(row, font, C_CREAM);
     lv_obj_set_flex_grow(r->label, 1);
     lv_label_set_long_mode(r->label, LV_LABEL_LONG_MODE_DOTS);
@@ -388,7 +389,7 @@ static row_t *row_create(const todo_item_t *it)
     lv_obj_set_flex_align(r->side, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(r->side, 10, 0);
 
-    r->note = text(r->side, &lv_font_montserrat_20, C_MUTED);
+    r->note = text(r->side, todo_font(20), C_MUTED);
 
     r->tag = box(r->side);
     lv_obj_set_size(r->tag, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -397,7 +398,7 @@ static row_t *row_create(const todo_item_t *it)
     lv_obj_set_style_radius(r->tag, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_pad_hor(r->tag, 14, 0);
     lv_obj_set_style_pad_ver(r->tag, 6, 0);
-    r->tag_label = text(r->tag, &lv_font_montserrat_16, C_MINT);
+    r->tag_label = text(r->tag, todo_font(16), C_MINT);
 
     r->undo = box(r->side);
     lv_obj_set_size(r->undo, 124, 56);
@@ -408,7 +409,7 @@ static row_t *row_create(const todo_item_t *it)
     lv_obj_set_style_clip_corner(r->undo, true, 0);
     lv_obj_add_flag(r->undo, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(r->undo, undo_clicked, LV_EVENT_CLICKED, r);
-    lv_obj_t *ul = text(r->undo, &lv_font_montserrat_24, C_PLUM_TEXT);
+    lv_obj_t *ul = text(r->undo, todo_font(24), C_PLUM_TEXT);
     lv_label_set_text(ul, "Undo");
     lv_obj_align(ul, LV_ALIGN_CENTER, 0, -2);
     r->undo_bar = box(r->undo);
@@ -642,16 +643,16 @@ static void build_list_extras(void)
     lv_obj_set_size(s.done_banner, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_style_pad_ver(s.done_banner, 6, 0);
     lv_obj_set_flex_flow(s.done_banner, LV_FLEX_FLOW_COLUMN);
-    lv_obj_t *title = text(s.done_banner, &lv_font_montserrat_40, C_BUTTER);
+    lv_obj_t *title = text(s.done_banner, todo_font(40), C_BUTTER);
     lv_label_set_text(title, "All done!");
-    s.done_banner_sub = text(s.done_banner, &lv_font_montserrat_20, C_CREAM);
+    s.done_banner_sub = text(s.done_banner, todo_font(20), C_CREAM);
     show(s.done_banner, false);
 
     s.ongoing_hdr = box(s.list);
     lv_obj_set_size(s.ongoing_hdr, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_style_pad_top(s.ongoing_hdr, 10, 0);
     lv_obj_set_style_pad_left(s.ongoing_hdr, 6, 0);
-    lv_obj_t *h = text(s.ongoing_hdr, &lv_font_montserrat_20, C_BUTTER);
+    lv_obj_t *h = text(s.ongoing_hdr, todo_font(20), C_BUTTER);
     lv_label_set_text(h, "Ongoing");
     show(s.ongoing_hdr, false);
 }
@@ -664,9 +665,9 @@ static void build_top(void)
     lv_obj_set_size(s.top, SCREEN_W, TOP_H);
     lv_obj_set_style_pad_hor(s.top, 28, 0);
 
-    s.date = text(s.top, &lv_font_montserrat_28, C_CREAM);
+    s.date = text(s.top, todo_font(28), C_CREAM);
     lv_obj_align(s.date, LV_ALIGN_TOP_LEFT, 0, 14);
-    s.clock = text(s.top, &lv_font_montserrat_20, C_MUTED);
+    s.clock = text(s.top, todo_font(20), C_MUTED);
     lv_obj_align(s.clock, LV_ALIGN_TOP_LEFT, 0, 50);
 
     s.pill = box(s.top);
@@ -680,7 +681,7 @@ static void build_top(void)
     lv_obj_set_height(s.pill_fill, 48);
     lv_obj_set_style_bg_opa(s.pill_fill, LV_OPA_40, 0);
     lv_obj_set_style_bg_color(s.pill_fill, col(C_PINK), 0);
-    s.pill_label = text(s.pill, &lv_font_montserrat_20, C_CREAM);
+    s.pill_label = text(s.pill, todo_font(20), C_CREAM);
     lv_obj_center(s.pill_label);
 
     /* Muse peeks up from behind the bottom edge of this little window. */
@@ -706,13 +707,13 @@ static void build_idle(lv_obj_t *parent)
     lv_obj_align(col_box, LV_ALIGN_LEFT_MID, 350, 0);
     lv_obj_set_flex_flow(col_box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(col_box, 6, 0);
-    s.idle_time = text(col_box, &lv_font_montserrat_48, C_CREAM);
-    s.idle_date = text(col_box, &lv_font_montserrat_24, C_MUTED);
+    s.idle_time = text(col_box, todo_font(48), C_CREAM);
+    s.idle_date = text(col_box, todo_font(24), C_MUTED);
     lv_obj_t *gap = box(col_box);
     lv_obj_set_size(gap, 1, 18);
-    lv_obj_t *wait = text(col_box, &lv_font_montserrat_32, C_PINK);
+    lv_obj_t *wait = text(col_box, todo_font(32), C_PINK);
     lv_label_set_text(wait, "waiting for\ntoday's list");
-    s.idle_sub = text(col_box, &lv_font_montserrat_20, C_MUTED);
+    s.idle_sub = text(col_box, todo_font(20), C_MUTED);
     lv_obj_set_width(s.idle_sub, 420);
     lv_label_set_long_mode(s.idle_sub, LV_LABEL_LONG_MODE_WRAP);
     lv_label_set_text(s.idle_sub, "Muse will send it over soon.");
@@ -732,11 +733,11 @@ static void build_done(void)
     lv_obj_align(col_box, LV_ALIGN_LEFT_MID, 360, -10);
     lv_obj_set_flex_flow(col_box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(col_box, 8, 0);
-    s.done_title = text(col_box, &lv_font_montserrat_48, C_BUTTER);
-    s.done_sub = text(col_box, &lv_font_montserrat_24, C_CREAM);
+    s.done_title = text(col_box, todo_font(48), C_BUTTER);
+    s.done_sub = text(col_box, todo_font(24), C_CREAM);
     lv_obj_set_width(s.done_sub, 400);
     lv_label_set_long_mode(s.done_sub, LV_LABEL_LONG_MODE_WRAP);
-    s.done_note = text(col_box, &lv_font_montserrat_20, C_MUTED);
+    s.done_note = text(col_box, todo_font(20), C_MUTED);
 }
 
 static const uint32_t CONFETTI_COLORS[] = { C_PINK, C_BUTTER, C_MINT, C_PEACH, C_CREAM };
@@ -758,7 +759,7 @@ static void build_party(void)
     }
     s.party_muse = todo_mascot_create(s.party, 256);
     lv_obj_align(s.party_muse, LV_ALIGN_CENTER, 0, -26);
-    s.party_title = text(s.party, &lv_font_montserrat_48, C_BUTTER);
+    s.party_title = text(s.party, todo_font(48), C_BUTTER);
     lv_label_set_text(s.party_title, "All done!");
     lv_obj_align(s.party_title, LV_ALIGN_BOTTOM_MID, 0, -18);
 }
@@ -808,11 +809,11 @@ static void build_bar(void)
     s.bar_muse = todo_mascot_create(head, 128);
     lv_obj_set_pos(s.bar_muse, -26, -20);
 
-    s.bar_text = text(s.bar, &lv_font_montserrat_24, C_PLUM_TEXT);
+    s.bar_text = text(s.bar, todo_font(24), C_PLUM_TEXT);
     lv_obj_set_width(s.bar_text, lv_pct(100));
     lv_label_set_long_mode(s.bar_text, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_height(s.bar_text, LV_SIZE_CONTENT);
-    lv_obj_set_style_max_height(s.bar_text, 2 * lv_font_get_line_height(&lv_font_montserrat_24), 0);
+    lv_obj_set_style_max_height(s.bar_text, 2 * lv_font_get_line_height(todo_font(24)), 0);
     lv_obj_align(s.bar_text, LV_ALIGN_LEFT_MID, 0, 0);
     show(s.bar, false);
 }
@@ -914,7 +915,7 @@ static lv_obj_t *pill_button(lv_obj_t *parent, const char *label, uint32_t bg, u
     lv_obj_set_style_bg_color(b, col(bg), 0);
     lv_obj_set_style_bg_color(b, col(C_CREAM), LV_STATE_PRESSED);
     lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_t *l = text(b, &lv_font_montserrat_24, fg);
+    lv_obj_t *l = text(b, todo_font(24), fg);
     lv_label_set_text(l, label);
     lv_obj_center(l);
     return b;
@@ -933,7 +934,7 @@ static void build_add(lv_obj_t *parent)
     lv_obj_set_ext_click_area(s.add_btn, 12); /* easy to hit from across the desk */
     lv_obj_add_flag(s.add_btn, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s.add_btn, add_btn_clicked, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *plus = text(s.add_btn, &lv_font_montserrat_28, C_PLUM_TEXT);
+    lv_obj_t *plus = text(s.add_btn, todo_font(28), C_PLUM_TEXT);
     lv_label_set_text(plus, LV_SYMBOL_PLUS);
     lv_obj_center(plus);
 
@@ -944,7 +945,7 @@ static void build_add(lv_obj_t *parent)
     lv_obj_set_style_bg_color(s.sheet, col(C_BG), 0);
     lv_obj_add_flag(s.sheet, LV_OBJ_FLAG_CLICKABLE); /* swallow taps meant for the list underneath */
 
-    lv_obj_t *title = text(s.sheet, &lv_font_montserrat_28, C_CREAM);
+    lv_obj_t *title = text(s.sheet, todo_font(28), C_CREAM);
     lv_label_set_text(title, "Add a task");
     lv_obj_set_pos(title, 28, 26);
 
@@ -961,7 +962,7 @@ static void build_add(lv_obj_t *parent)
     lv_textarea_set_one_line(s.sheet_ta, true);
     lv_textarea_set_max_length(s.sheet_ta, TODO_LABEL_MAX);
     lv_textarea_set_placeholder_text(s.sheet_ta, "What should Muse add?");
-    lv_obj_set_style_text_font(s.sheet_ta, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(s.sheet_ta, todo_font(28), 0);
     lv_obj_set_style_text_color(s.sheet_ta, col(C_CREAM), 0);
     lv_obj_set_style_text_color(s.sheet_ta, col(C_FAINT), LV_PART_TEXTAREA_PLACEHOLDER);
     lv_obj_set_style_bg_color(s.sheet_ta, col(C_CARD), 0);
@@ -984,11 +985,11 @@ static void build_add(lv_obj_t *parent)
     lv_obj_set_ext_click_area(s.sheet_ongoing, 8);
     lv_obj_add_flag(s.sheet_ongoing, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s.sheet_ongoing, sheet_ongoing_clicked, LV_EVENT_CLICKED, NULL);
-    s.sheet_ongoing_label = text(s.sheet_ongoing, &lv_font_montserrat_20, C_MUTED);
+    s.sheet_ongoing_label = text(s.sheet_ongoing, todo_font(20), C_MUTED);
     lv_obj_center(s.sheet_ongoing_label);
     sheet_set_ongoing(false);
 
-    s.sheet_err = text(s.sheet, &lv_font_montserrat_20, C_PEACH);
+    s.sheet_err = text(s.sheet, todo_font(20), C_PEACH);
     lv_obj_set_pos(s.sheet_err, 32, 166);
 
     s.sheet_kb = lv_keyboard_create(s.sheet);
@@ -1004,7 +1005,7 @@ static void build_add(lv_obj_t *parent)
     lv_obj_set_style_bg_color(s.sheet_kb, col(C_CARD_PRESSED), LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_bg_color(s.sheet_kb, col(C_PINK), LV_PART_ITEMS | LV_STATE_PRESSED);
     lv_obj_set_style_text_color(s.sheet_kb, col(C_CREAM), LV_PART_ITEMS);
-    lv_obj_set_style_text_font(s.sheet_kb, &lv_font_montserrat_24, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(s.sheet_kb, todo_font(24), LV_PART_ITEMS);
     lv_obj_set_style_radius(s.sheet_kb, 14, LV_PART_ITEMS);
     lv_obj_set_style_border_width(s.sheet_kb, 0, LV_PART_ITEMS);
     lv_obj_set_style_shadow_width(s.sheet_kb, 0, LV_PART_ITEMS);

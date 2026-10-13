@@ -48,6 +48,11 @@
 #define LV_FONT_UNSCII_16 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_20
 
+/* Fallback glyphs beyond ASCII (todo_fonts.c): match CONFIG_LV_USE_TINY_TTF in
+ * firmware/sdkconfig.todo. */
+#define LV_USE_TINY_TTF 1
+#define LV_TINY_TTF_FILE_SUPPORT 0
+
 #define LV_USE_THEME_DEFAULT 1
 #define LV_THEME_DEFAULT_DARK 1
 #define LV_THEME_DEFAULT_GROW 1

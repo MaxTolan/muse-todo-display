@@ -4,7 +4,7 @@
 # WHOLE_ARCHIVE: todo_glue.c registers itself with the SDK (muse_ext.h) from a
 # constructor, and nothing else references it.
 idf_component_register(
-    SRCS "todo_model.c" "todo_ui.c" "todo_mascot.c" "todo_glue.c"
+    SRCS "todo_model.c" "todo_ui.c" "todo_mascot.c" "todo_fonts.c" "todo_font_extra.c" "todo_glue.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "."
     REQUIRES muse

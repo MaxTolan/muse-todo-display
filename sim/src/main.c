@@ -21,6 +21,7 @@
 #include "src/drivers/sdl/lv_sdl_window.h"
 
 #include "png_write.h"
+#include "todo_fonts.h"
 #include "todo_model.h"
 #include "todo_ui.h"
 
@@ -569,6 +570,11 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
             if (ok) {
                 drag(x1, y1, x2, y2, real_time);
             }
+        } else if (!strcmp(k, "expect_renders") || !strcmp(k, "expect_not_renders")) {
+            /* Every character of the text has a glyph in the row font (with its fallback). */
+            bool can = todo_font_can_render(todo_font(28), v);
+            bool want = !strcmp(k, "expect_renders");
+            check(can == want, line_no, want ? "renders" : "missing glyphs", can ? "renders" : "missing glyphs");
         } else if (!strcmp(k, "info")) {
             char info[200];
             todo_ui_scroll_info(info, sizeof(info));
