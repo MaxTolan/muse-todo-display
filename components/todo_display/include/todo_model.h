@@ -226,9 +226,12 @@ bool todo_model_list_result(const todo_model_t *m, bool ongoing, char *out, size
 uint32_t todo_message_hold_ms(const char *text);
 
 /*
- * Whether items from a source can be ticked off by hand: "manual", plus
- * "healthkit" as a backup for when HealthKit is slow to sync (owner's choice).
- * Other sources stay display-only until Muse marks them.
+ * Whether items from a source can be ticked off by hand: every source except
+ * the ones Muse completes itself from another app ("myfitnesspal"). That
+ * includes "healthkit", as a backup for when HealthKit is slow to sync
+ * (owner's choice), and sources the firmware doesn't know: Muse once sent
+ * "daily", "one-off" and "ongoing" as sources, which locked every row
+ * (owner, Oct 15).
  */
 bool todo_source_tappable(const char *source);
 

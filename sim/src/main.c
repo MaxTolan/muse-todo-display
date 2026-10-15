@@ -588,6 +588,15 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
             bool can = todo_font_can_render(todo_font(28), v);
             bool want = !strcmp(k, "expect_renders");
             check(can == want, line_no, want ? "renders" : "missing glyphs", can ? "renders" : "missing glyphs");
+        } else if (!strcmp(k, "press_info")) {
+            /* What a press at x,y would land on: the line the firmware logs per press. */
+            int x, y;
+            ok = sscanf(v, "%d,%d", &x, &y) == 2;
+            if (ok) {
+                char info[2048];
+                todo_ui_press_info(&(lv_point_t){ x, y }, info, sizeof(info));
+                printf("[%7u] %s\n", g.now_ms, info);
+            }
         } else if (!strcmp(k, "info")) {
             char info[200];
             todo_ui_scroll_info(info, sizeof(info));

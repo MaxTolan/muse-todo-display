@@ -31,10 +31,12 @@ day (HealthKit completions, new reminders, edits).
   - `id` — unique **per occurrence**, not per habit: daily items need the date in the ID so
     today's completion can't be mistaken for yesterday's. Muse generates IDs; the device only
     echoes them back.
-  - `source` — free-form string: `manual`, `healthkit`, `myfitnesspal`, or anything new.
-    `manual` and `healthkit` items are tappable (HealthKit as a backup when it's slow to sync);
-    any non-manual value is shown as a tag. New sources need no
-    firmware change.
+  - `source` — who marks the item done, not what kind of item it is: `manual` for anything
+    the owner ticks off on the screen (habits, one-offs, ongoing tasks), or the app Muse
+    completes it from (`healthkit`, `myfitnesspal`, or anything new). Every source is tappable
+    except `myfitnesspal` (HealthKit as a backup when it's slow to sync), so an unexpected
+    value never locks a row; any non-manual value is shown as a tag. New sources need no
+    firmware change. (Muse once sent `daily`, `one-off` and `ongoing` here: owner, Oct 15.)
   - `done` — `true` for items Muse already considers complete.
 - Returns `{"ok": true, "payload": {"shown": N, "pending": [ids in the outbox]}}`.
 - Validate everything yourself (the SDK doesn't): reject non-arrays, missing/overlong fields,

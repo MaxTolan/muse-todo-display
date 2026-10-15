@@ -207,8 +207,14 @@ static void test_healthkit_backup_tap(void)
     CHECK(todo_model_find(&M, "steps@1007")->tappable);
     CHECK(todo_model_find(&M, "rosary@1007")->tappable);
 
-    /* Other auto sources stay display-only. */
+    /* Sources Muse completes from another app stay display-only. */
     CHECK(!todo_model_find(&M, "protein@1007")->tappable);
+    /* Sources the firmware doesn't know are tappable: Muse once sent these. */
+    CHECK(todo_source_tappable("daily"));
+    CHECK(todo_source_tappable("one-off"));
+    CHECK(todo_source_tappable("ongoing"));
+    CHECK(todo_source_tappable(NULL));
+    CHECK(!todo_source_tappable("myfitnesspal"));
     CHECK(!todo_model_tap(&M, "protein@1007", T));
 
     /* HealthKit is lagging: tick it by hand. Same undo window, then it's sent. */

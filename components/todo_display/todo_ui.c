@@ -1473,6 +1473,69 @@ void todo_ui_scroll_info(char *out, size_t len)
              (int)lv_obj_get_scroll_bottom(s.list), rows, s.bar_on, lv_obj_has_flag(s.list, LV_OBJ_FLAG_HIDDEN));
 }
 
+static const char *obj_name(lv_obj_t *o, char *buf, size_t len)
+{
+    if (!o) {
+        return "nothing";
+    }
+    for (size_t i = 0; i < TODO_MAX_ITEMS; i++) {
+        row_t *r = &s.rows[i];
+        if (r->used && (o == r->row || o == r->undo)) {
+            snprintf(buf, len, "%s:%s", o == r->row ? "row" : "undo", r->id);
+            return buf;
+        }
+    }
+    const char *name = o == s.list ? "list" : o == s.root ? "root" : o == s.main ? "main" : o == s.bar ? "bar"
+                     : o == s.sheet ? "sheet" : o == s.add_btn ? "add" : NULL;
+    if (name) {
+        return name;
+    }
+    int depth = 0;
+    for (lv_obj_t *p = o; p; p = lv_obj_get_parent(p), depth++) {
+        if (p == s.root) {
+            snprintf(buf, len, "todo child %p (depth %d)", (void *)o, depth);
+            return buf;
+        }
+    }
+    lv_area_t a;
+    lv_obj_get_coords(o, &a);
+    snprintf(buf, len, "not ours %p at %d,%d..%d,%d", (void *)o, (int)a.x1, (int)a.y1, (int)a.x2, (int)a.y2);
+    return buf;
+}
+
+void todo_ui_press_info(const lv_point_t *pt, char *out, size_t len)
+{
+    lv_point_t p = *pt;
+    lv_obj_t *hit = lv_indev_search_obj(lv_layer_sys(), &p);
+    if (!hit) {
+        hit = lv_indev_search_obj(lv_layer_top(), &p);
+    }
+    if (!hit) {
+        hit = lv_indev_search_obj(lv_screen_active(), &p);
+    }
+    char name[64], list[160];
+    todo_ui_scroll_info(list, sizeof(list));
+    lv_area_t m;
+    lv_obj_get_coords(s.main, &m);
+    int n = snprintf(out, len, "press %d,%d -> %s | %s main=%d,%d..%d,%d list_clickable=%d", (int)p.x, (int)p.y,
+                     obj_name(hit, name, sizeof(name)), list, (int)m.x1, (int)m.y1, (int)m.x2, (int)m.y2,
+                     lv_obj_has_flag(s.list, LV_OBJ_FLAG_CLICKABLE));
+    /* Each row: id, model state and tappable, clickable flag, where it is. */
+    for (size_t i = 0; i < TODO_MAX_ITEMS && n > 0 && (size_t)n < len; i++) {
+        row_t *r = &s.rows[i];
+        if (!r->used) {
+            continue;
+        }
+        const todo_item_t *it = todo_model_find(s.model, r->id);
+        lv_area_t a;
+        lv_obj_get_coords(r->row, &a);
+        n += snprintf(out + n, len - (size_t)n, "\n  row %s src=%s state=%d tappable=%d clickable=%d hidden=%d y=%d..%d",
+                      r->id, it ? it->source : "?", it ? (int)it->state : -1, it ? it->tappable : -1,
+                      lv_obj_has_flag(r->row, LV_OBJ_FLAG_CLICKABLE), lv_obj_has_flag(r->row, LV_OBJ_FLAG_HIDDEN),
+                      (int)a.y1, (int)a.y2);
+    }
+}
+
 int32_t todo_ui_list_scroll_y(void)
 {
     return lv_obj_get_scroll_y(s.list);

@@ -73,11 +73,13 @@ Previews: `docs/previews/p*.png` and `contact-sheet-portrait.png` (simulator `--
 Items Muse marks done (HealthKit and other auto sources) skip the outbox: the row shows
 crossed out with its source tag for a few seconds, then fades out. No message is sent.
 
-Tappable items: `source: "manual"`, and `source: "healthkit"` as a manual backup for when
-HealthKit is slow to sync (owner's choice, Oct 7). A hand-ticked HealthKit item goes through the
-same undo window and outbox, and its message says it was marked by hand (see
-`04-agent-integration.md`). Other auto sources (e.g. `myfitnesspal`) are display-only until Muse
-marks them.
+Tappable items: every source except the ones Muse completes itself from another app
+(`myfitnesspal`), which are display-only until Muse marks them. That includes
+`source: "healthkit"` as a manual backup for when HealthKit is slow to sync (owner's choice,
+Oct 7). A hand-ticked HealthKit item goes through the same undo window and outbox, and its
+message says it was marked by hand (see `04-agent-integration.md`). Sources the firmware doesn't
+know are tappable too: Muse once sent `daily`, `one-off` and `ongoing` as sources, and every row
+locked (owner, Oct 15).
 
 ## List updates
 
@@ -115,7 +117,7 @@ marks them.
 - Multi-day work (e.g. building an agent, training models) comes from `todo.set_ongoing`, not
   the daily list, and shows in its own **Ongoing** section below the day's items: a butter-yellow
   "Ongoing" header, slightly smaller rows, butter rings and checks instead of pink.
-- They behave like daily items: tappable if `manual` or `healthkit`, the same undo window, the
+- They behave like daily items: tappable unless the source is `myfitnesspal`, the same undo window, the
   same send-to-Muse outbox (the line says "Completed (ongoing)"), the same dance, and they leave
   when Muse replies.
 - They are not part of the day: "N of M done" counts only today's list, and finishing today's
@@ -151,8 +153,8 @@ screen — time/date and "waiting for today's list" — never an error dump.
 ## Item types (examples — the firmware must not hard-code these)
 
 The device renders whatever Muse sends. Behaviour depends only on `source`
-(`manual` and `healthkit` → tappable; anything else → display-only. Non-manual items show a
-source tag).
+(`myfitnesspal` → display-only; anything else, unknown sources included → tappable.
+Non-manual items show a source tag).
 
 | Item | `source` | Notes |
 | --- | --- | --- |

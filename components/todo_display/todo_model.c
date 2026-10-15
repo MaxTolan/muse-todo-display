@@ -133,9 +133,20 @@ static void remove_at(todo_model_t *m, size_t i)
     m->count--;
 }
 
+/* Sources Muse ticks off itself from another app, so the owner can't by hand. */
+static const char *const AUTO_ONLY_SOURCES[] = { "myfitnesspal" };
+
 bool todo_source_tappable(const char *source)
 {
-    return source && (!strcmp(source, "manual") || !strcmp(source, "healthkit"));
+    if (!source) {
+        return true;
+    }
+    for (size_t i = 0; i < sizeof(AUTO_ONLY_SOURCES) / sizeof(AUTO_ONLY_SOURCES[0]); i++) {
+        if (!strcmp(source, AUTO_ONLY_SOURCES[i])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 const char *todo_source_label(const char *source)

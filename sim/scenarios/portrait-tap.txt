@@ -23,3 +23,15 @@ drag=240,700,240,450
 advance=1200
 expect_scrolled=100
 expect_state=vit-am@2026-10-07 open
+
+# Muse once sent "daily", "one-off" and "ongoing" as sources (owner, Oct 15).
+# Sources the firmware doesn't know are tappable, so the rows still tick.
+set_list=[{"id":"pt@2026-10-15","label":"PT exercises","source":"daily"},{"id":"pack@2026-10-15","label":"Pack for Vegas","source":"one-off"}]
+set_ongoing=[{"id":"vpop-agent","label":"Build the VPOP survey-question agent","source":"ongoing"}]
+advance=1000
+tap=row:pt@2026-10-15
+advance=600
+expect_state=pt@2026-10-15 undo
+tap=row:vpop-agent
+advance=600
+expect_state=vpop-agent undo

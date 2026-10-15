@@ -268,8 +268,12 @@ static void register_commands(cJSON *commands)
     cJSON *req = cJSON_CreateObject();
     cJSON_AddItemToObject(req, "items", string_param(
         "JSON array (as a string) of {id, label, source, done}. id is unique per occurrence "
-        "(include the date for daily items); source is manual, healthkit, myfitnesspal, etc.; "
-        "done is true for items already complete. Max 40 items, labels 120 chars."));
+        "(include the date for daily items). source says who marks the item done, not what kind "
+        "of item it is: \"manual\" for anything the owner ticks off on the screen (habits, "
+        "one-offs, reminders), or the app Muse completes it from (\"healthkit\", "
+        "\"myfitnesspal\"); myfitnesspal items can't be ticked by hand. Any source but manual "
+        "is shown as a tag. done is true for items already complete. Max 40 items, labels "
+        "120 chars."));
     cJSON *opt = cJSON_CreateObject();
     cJSON_AddItemToObject(opt, "date", string_param("The day the list is for, shown at the top."));
     add_command(commands, "todo.set_list",
@@ -280,8 +284,9 @@ static void register_commands(cJSON *commands)
 
     cJSON *oreq = cJSON_CreateObject();
     cJSON_AddItemToObject(oreq, "items", string_param(
-        "JSON array (as a string) of {id, label, source, done}, like todo.set_list. Use stable ids "
-        "with no date. Max 15."));
+        "JSON array (as a string) of {id, label, source, done}, like todo.set_list (source is "
+        "usually \"manual\"; don't use it to say a task is ongoing). Use stable ids with no date. "
+        "Max 15."));
     add_command(commands, "todo.set_ongoing",
                 "Replace the owner's ongoing (multi-day) tasks, shown in their own section. "
                 "todo.set_list never changes them; leave a task out here to remove it.",

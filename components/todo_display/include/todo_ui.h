@@ -64,6 +64,9 @@ bool todo_ui_fully_visible(const char *target);
 /* One line describing the list's size and scroll state (for device logs). */
 void todo_ui_scroll_info(char *out, size_t len);
 
+/* One line naming what a press at pt lands on, and the list's state (for device logs). */
+void todo_ui_press_info(const lv_point_t *pt, char *out, size_t len);
+
 /* How far the list is scrolled down, in pixels (for tests). */
 int32_t todo_ui_list_scroll_y(void);
 
