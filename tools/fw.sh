@@ -3,7 +3,8 @@
 #
 #   tools/fw.sh build      apply our SDK patches, then build
 #   tools/fw.sh flash      build, then flash the board over USB
-#   tools/fw.sh monitor    show the board's console (Ctrl-] to quit)
+#   tools/fw.sh monitor    show the board's console (Ctrl-] to quit; --no-reset
+#                          attaches without restarting the board)
 #
 # Needs ESP-IDF v6.0.1 (~/esp/esp-idf-v6.0.1, or IDF_EXPORT=/path/to/export.sh)
 # and your SDK token in sdk_token.local (one line, mgst_...; git-ignored).
@@ -94,9 +95,16 @@ flash)
     "$ESP32/tools/muse/board.sh" flash "$BOARD" "${2:-}"
     ;;
 monitor)
+    # tools/fw.sh monitor [PORT] [--no-reset ...]: options go to idf.py monitor.
+    shift
+    sel=""
+    if [[ $# -gt 0 && "$1" != -* ]]; then
+        sel="$1"
+        shift
+    fi
     idf_env
-    port="$(python3 "$ESP32/tools/muse/ports.py" "$BOARD" ${2:-})"
-    cd "$BUILD" && exec idf.py -B "$BUILD" -p "$port" monitor
+    port="$(python3 "$ESP32/tools/muse/ports.py" "$BOARD" $sel)"
+    cd "$ESP32" && exec idf.py -B "$BUILD" -p "$port" monitor "$@"
     ;;
 *)
     sed -n '2,9p' "$0"
