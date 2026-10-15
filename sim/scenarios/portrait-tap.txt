@@ -1,0 +1,25 @@
+# A fingertip wobbles while it taps. On the device rows wouldn't tick while
+# the list scrolled fine: LVGL took any slide over 10 px for the start of a
+# scroll and dropped the tap. Taps that slide up to TAP_SLOP_PX still tick;
+# a longer drag still scrolls and ticks nothing.
+clock=2026-10-13 07:40
+online=false
+list_date=Tuesday, October 13
+set_list_file=day.json
+advance=500
+
+# Rosary, sliding 16 px down and right.
+drag=240,170,256,186
+advance=600
+expect_state=rosary@2026-10-07 undo
+
+# 10,000 steps, sliding 18 px up.
+drag=240,360,240,342
+advance=600
+expect_state=steps@2026-10-07 undo
+
+# A real drag from Vitamins AM scrolls the list instead.
+drag=240,700,240,450
+advance=1200
+expect_scrolled=100
+expect_state=vit-am@2026-10-07 open

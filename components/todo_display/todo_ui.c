@@ -41,6 +41,7 @@
 
 #define TOP_H (s.top_h) /* 84 landscape; two rows (128) in portrait */
 #define ROW_MIN_H 80
+#define TAP_SLOP_PX 24 /* a finger may slide this far and still tap (~3 mm) */
 #define CHECK_PX 52
 #define SQUISH_MS 320u
 #define SWOOSH_MS 420u
@@ -1086,6 +1087,15 @@ void todo_ui_create(lv_obj_t *parent, todo_model_t *model)
 
     lv_obj_set_style_bg_color(parent, col(C_BG), 0);
     lv_obj_set_style_bg_opa(parent, LV_OPA_COVER, 0);
+
+    /* A fingertip on the panel wobbles more than LVGL's default 10 px while it
+     * taps, which LVGL takes for the start of a scroll and drops the tap (seen
+     * on the device: the list scrolled but rows wouldn't tick). */
+    for (lv_indev_t *in = lv_indev_get_next(NULL); in; in = lv_indev_get_next(in)) {
+        if (lv_indev_get_type(in) == LV_INDEV_TYPE_POINTER) {
+            lv_indev_set_scroll_limit(in, TAP_SLOP_PX);
+        }
+    }
 
     s.root = box(parent);
     lv_obj_set_size(s.root, SCREEN_W, SCREEN_H);
