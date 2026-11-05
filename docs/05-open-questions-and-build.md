@@ -54,8 +54,14 @@
   Muse app > Settings > Devices > Add Device > MuseGadget-XXXXXX). The SDK's own screens take
   over only while pairing is in progress (app connected, or the tap-to-confirm prompt), and
   settings stay one swipe to the left.
-- **Screen auto-sleep is turned off** once, on the first boot of this firmware (a desk display
-  should stay visible). It can be changed in the SDK's settings afterwards.
+- **Screen auto-sleep after 2 minutes** (issue #9, Oct 21: the battery lasts 3-5 hours lit).
+  Set once, on the first boot of this firmware, also over the old "never sleep" default. The
+  "Stay on" chip switches the SDK's sleep setting between "Never" and "2 min", so it survives
+  reboots and the SDK's settings page shows the same. **The board can't tell USB power from
+  battery:** on its schematic (v1.2) the CS8501 charger's CHRG/STDBY only drive LEDs, and
+  neither VBUS nor the battery reaches an ESP32 pin or the CH422G. So the owner says, with the
+  chip. (A wire from USB 5 V to the isolated DI0 input, read on CH422G EXIO0, would let the
+  firmware sense it; not done.)
 - **Patch 0003 (`muse_ext.h`)** keeps all todo code in our component: the SDK only gains generic
   hooks, so `main/` needs no todo-specific code and the SDK checkout builds other boards as before.
 

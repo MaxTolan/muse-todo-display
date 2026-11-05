@@ -134,10 +134,16 @@ to the display. Reply in one short sentence."*
   time, oldest first, batching whatever is queued.
 - `muse_hatch_text_turn` refuses a turn when Muse isn't set up or another turn is running
   (it logs `MUSE NOT SET UP` / `BUSY` and frees the text). Treat both as "not sent yet" and retry.
-- On `DONE`: remove those IDs from the outbox, show the reply text in the message bar, and
-  remove the rows.
-- On `ERROR` or no `DONE` within a timeout (e.g. 60 s): keep the IDs and retry with backoff
-  (e.g. 10 s, 30 s, 2 min, then every 5 min). A resend after a lost reply is safe because of the IDs.
+- **Delivered on Muse's acknowledgement** (`@chat ack`, SDK patch 0005; issue #10): once Muse
+  has the message, its IDs leave the outbox and are never sent again, however long the reply
+  takes. The reply text still shows in the message bar when it arrives (waited for up to 5 min).
+- On `DONE`: show the reply text in the message bar and remove the rows (and, if no ack came
+  first, remove the IDs from the outbox).
+- On `ERROR` or no ack within 60 s: keep the IDs and retry with backoff (10 s, 30 s, 2 min,
+  then every 5 min). A resend is safe because of the IDs.
+- A `todo.set_list` / `todo.set_ongoing` that lists a waiting completion as `done: true` means
+  Muse already has it: it leaves the outbox and isn't sent again (issue #10). An item still in
+  its undo window keeps its local state.
 - After a long run of failures (e.g. 24 h), drop the entry, show "couldn't reach Muse" and move on.
 
 ### Plumbing note

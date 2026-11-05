@@ -47,7 +47,8 @@ extern "C" {
 #define TODO_MESSAGE_SHORT_CHARS 50
 #define TODO_MESSAGE_SHORT_MS 30000u
 #define TODO_MESSAGE_LONG_MS (5u * 60u * 1000u)
-#define TODO_TURN_TIMEOUT_MS 60000u
+#define TODO_TURN_TIMEOUT_MS 60000u            /* sent, but Muse hasn't acknowledged it */
+#define TODO_REPLY_TIMEOUT_MS (5u * 60u * 1000u) /* acknowledged: how long to wait for the reply text */
 #define TODO_REFUSED_RETRY_MS 2000u
 #define TODO_GIVE_UP_S (24 * 60 * 60)
 
@@ -134,6 +135,7 @@ typedef struct {
     /* Outbox sending. */
     bool online;
     bool in_flight;
+    bool acked;           /* Muse has the turn in flight: it's delivered, whatever happens to the reply */
     uint32_t in_flight_ms;
     uint32_t next_send_ms;
     unsigned retry_stage;
@@ -194,6 +196,12 @@ bool todo_model_undo(todo_model_t *m, const char *id, uint32_t now_ms);
 void todo_model_clear_message(todo_model_t *m);
 
 /* Chat turn events for the turn this model started. Ignored if none is in flight. */
+/*
+ * Muse has acknowledged the message ("@chat ack"): its completions and task
+ * requests are delivered and never re-sent, even if the reply is slow or the
+ * turn fails afterwards (issue #10). The reply text still shows when it comes.
+ */
+void todo_model_turn_acked(todo_model_t *m, uint32_t now_ms);
 void todo_model_turn_reply(todo_model_t *m, const char *chunk);
 void todo_model_turn_done(todo_model_t *m, uint32_t now_ms);
 void todo_model_turn_error(todo_model_t *m, uint32_t now_ms);

@@ -471,9 +471,16 @@ static bool replace_items(todo_model_t *m, const char *items_json, bool ongoing,
         if (old) {
             switch (old->state) {
             case TODO_ROW_UNDO:
+                break; /* the owner can still undo it */
             case TODO_ROW_QUEUED:
             case TODO_ROW_SENDING:
-                break; /* local state wins until Muse has replied */
+                /* Listed as done: Muse already has this completion (an earlier
+                 * report got there even if its reply didn't), so stop sending
+                 * it (issue #10). Otherwise local state wins until Muse replies. */
+                if (muse_done) {
+                    set_state(it, TODO_ROW_LEAVING, now_ms);
+                }
+                break;
             case TODO_ROW_OPEN:
                 if (muse_done) {
                     set_state(it, TODO_ROW_AUTO_DONE, now_ms);
@@ -755,6 +762,26 @@ static void drop_sent_adds(todo_model_t *m)
     m->add_count = kept;
 }
 
+void todo_model_turn_acked(todo_model_t *m, uint32_t now_ms)
+{
+    if (!m->in_flight || m->acked) {
+        return;
+    }
+    m->acked = true;
+    for (size_t i = 0; i < m->count; i++) {
+        todo_item_t *it = &m->items[i];
+        if (it->state == TODO_ROW_SENDING) {
+            it->muse_done = true;
+            set_state(it, TODO_ROW_LEAVING, now_ms);
+        }
+    }
+    drop_sent_adds(m);
+    m->retry_stage = 0;
+    m->first_fail_at = 0;
+    m->seq++;
+    save(m);
+}
+
 void todo_model_turn_reply(todo_model_t *m, const char *chunk)
 {
     if (!m->in_flight || !chunk) {
@@ -770,6 +797,7 @@ void todo_model_turn_done(todo_model_t *m, uint32_t now_ms)
         return;
     }
     m->in_flight = false;
+    m->acked = false;
     for (size_t i = 0; i < m->count; i++) {
         todo_item_t *it = &m->items[i];
         if (it->state == TODO_ROW_SENDING) {
@@ -796,6 +824,13 @@ void todo_model_turn_error(todo_model_t *m, uint32_t now_ms)
     }
     m->in_flight = false;
     m->reply[0] = '\0';
+    if (m->acked) {
+        /* Delivered already: only the reply was lost. Nothing to send again. */
+        m->acked = false;
+        m->next_send_ms = now_ms;
+        m->seq++;
+        return;
+    }
     for (size_t i = 0; i < m->count; i++) {
         if (m->items[i].state == TODO_ROW_SENDING) {
             set_state(&m->items[i], TODO_ROW_QUEUED, now_ms);
@@ -846,6 +881,7 @@ static void try_send(todo_model_t *m, uint32_t now)
         return;
     }
     m->in_flight = true;
+    m->acked = false;
     m->in_flight_ms = now;
     m->reply[0] = '\0';
     for (size_t i = 0; i < m->count; i++) {
@@ -919,7 +955,8 @@ void todo_model_tick(todo_model_t *m, uint32_t now_ms)
     if (m->message[0] && elapsed(now_ms, m->message_ms, m->message_hold_ms)) {
         todo_model_clear_message(m);
     }
-    if (m->in_flight && elapsed(now_ms, m->in_flight_ms, TODO_TURN_TIMEOUT_MS)) {
+    if (m->in_flight
+        && elapsed(now_ms, m->in_flight_ms, m->acked ? TODO_REPLY_TIMEOUT_MS : TODO_TURN_TIMEOUT_MS)) {
         todo_model_turn_error(m, now_ms);
     }
     try_send(m, now_ms);

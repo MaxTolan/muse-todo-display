@@ -43,13 +43,14 @@ expect_state=rosary@2026-10-07 undo
 # With a message showing at the bottom, the last task still comes into view.
 message=Remember the PT exercises before dinner, and drink some water.
 advance=800
-drag=400,360,400,100
+# (Drags start above the bar: the list now ends just over it, at its real height.)
+drag=400,330,400,100
 advance=800
-drag=400,360,400,100
+drag=400,330,400,100
 advance=800
-drag=400,360,400,100
+drag=400,330,400,100
 advance=800
-drag=400,360,400,100
+drag=400,330,400,100
 advance=1500
 expect_visible=row:swift
 screenshot=31-scrolled-to-bottom-with-message.png

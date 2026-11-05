@@ -41,6 +41,18 @@ typedef enum {
 /* Update the Wi-Fi icon (cheap to call every frame). */
 void todo_ui_set_wifi(todo_wifi_t state);
 
+/*
+ * The "Stay on" chip beside the clock: set_stay_on shows the current setting
+ * (cheap to call every frame), and a tap flips it and calls the callback with
+ * the new value (the firmware turns screen auto-sleep off or on).
+ */
+void todo_ui_set_stay_on(bool on);
+void todo_ui_on_stay_on(void (*cb)(bool on));
+bool todo_ui_stay_on(void);
+
+/* Tests: the message bar shows all of its text (issue #11); true when there's no bar. */
+bool todo_ui_message_fits(void);
+
 /* Have the little top-hat Muse peek in from the top bar for a few seconds. */
 void todo_ui_peek(uint32_t now_ms);
 

@@ -1,0 +1,19 @@
+# Issue #11: the message bar shows a whole reply, however long, on the landscape
+# screen. The reply that was cut off at "steps open t" fits, and so does the
+# longest message allowed (280 characters).
+clock=2026-10-29 18:10
+list_date=Thursday, October 29
+set_list_file=day.json
+advance=500
+auto_reply=Logged — PT is done, leaving just steps open today.
+auto_reply_ms=800
+tap=row:rosary@2026-10-07
+advance=6500
+expect_message=Logged — PT is done, leaving just steps open today.
+expect_message_fits=true
+screenshot=37-reply-whole.png
+
+message=Reminder: PT is better before dinner, and the UPS store on Main closes at 7 tonight, so leave by 6:30 with the box and the book. Also, the pharmacy texted that the refill is ready, and it's supposed to rain around 8, so take the big umbrella if you walk over. Have a good evening!
+advance=600
+expect_message_fits=true
+screenshot=37b-message-280.png

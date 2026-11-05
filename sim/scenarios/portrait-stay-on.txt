@@ -1,0 +1,31 @@
+# The "Stay on" chip beside the clock (issue #9). The screen sleeps after 2
+# minutes without a touch; the board can't sense USB power, so the owner taps
+# the chip when it's plugged in. On the device it sets the SDK's sleep setting
+# (never / 2 min); the sleep timer itself is the SDK's and isn't simulated.
+clock=2026-10-21 08:05
+list_date=Wednesday, October 21
+set_list_file=day.json
+advance=1000
+expect_stay_on=false
+screenshot=p09-auto-off.png
+
+tap=stay_on
+advance=300
+expect_stay_on=true
+screenshot=p10-stay-on.png
+
+# Taps still reach the rows beside it.
+tap=row:rosary@2026-10-07
+advance=600
+expect_state=rosary@2026-10-07 undo
+
+tap=stay_on
+advance=300
+expect_stay_on=false
+
+# The setting survives a reboot (it's the SDK's sleep setting).
+tap=stay_on
+advance=300
+reboot=1
+advance=1000
+expect_stay_on=true

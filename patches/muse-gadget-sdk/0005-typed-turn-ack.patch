@@ -1,0 +1,28 @@
+diff --git a/esp32/components/muse/muse_chat.h b/esp32/components/muse/muse_chat.h
+index 170e040..865ec14 100644
+--- a/esp32/components/muse/muse_chat.h
++++ b/esp32/components/muse/muse_chat.h
+@@ -125,7 +125,8 @@ size_t muse_hatch_turn_audio_wait(const int16_t *pcm, size_t frames, int wait_ms
+  * Sends typed text to the chat. The reply isn't spoken or captioned: it goes to
+  * the console as it streams in, however long it is, one line per piece:
+  *   @chat {"seq":N,"type":TYPE,...}
+- * TYPE is "sent" (bytes), "busy" (on: the agent is working), "text" (msg, text),
++ * TYPE is "sent" (bytes), "ack" (Muse has the message), "busy" (on: the agent
++ * is working), "text" (msg, text),
+  * "message_done" (msg, bytes), "done" (messages, complete) or "error" (text).
+  * tools/muse/chat.py reads them. Takes `text` (malloc'd) and frees it. A voice
+  * press ends a typed turn; a typed turn is refused while a voice turn runs.
+diff --git a/esp32/components/muse/muse_chat_session.cpp b/esp32/components/muse/muse_chat_session.cpp
+index 9c99dc0..014ddfb 100644
+--- a/esp32/components/muse/muse_chat_session.cpp
++++ b/esp32/components/muse/muse_chat_session.cpp
+@@ -1495,6 +1495,9 @@ static void on_chat_ack(stream_t *s)
+     s_turn.acked = true;
+     mark(M_ACK);
+     ESP_LOGI(TAG, "chat/stream ack: user message %s", s_turn.user_ids[0]);
++    if (s_turn.text) {
++        muse_hatch_console("ack", nullptr, nullptr);   /* Muse has the typed message */
++    }
+     cJSON_Delete(root);
+     emit(MUSE_HATCH_EV_SENT, nullptr);
+ }

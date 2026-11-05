@@ -60,6 +60,8 @@ static struct {
     lv_point_t touch_pt;
     bool touch_down;
 
+    bool stay_on; /* the firmware's "never sleep" setting */
+
     todo_model_t model;
     int failures;
     volatile sig_atomic_t quit;
@@ -127,6 +129,17 @@ static void muse_reply(const char *text)
     printf("[%7u] Muse <<< %s\n", g.now_ms, text);
     todo_model_turn_reply(&g.model, text);
     todo_model_turn_done(&g.model, g.now_ms);
+}
+
+/* Muse acknowledges the turn ("@chat ack"): delivered, the reply still to come. */
+static void muse_ack(void)
+{
+    if (!g.turn_open) {
+        printf("[%7u] (no turn to acknowledge)\n", g.now_ms);
+        return;
+    }
+    printf("[%7u] Muse has it (ack)\n", g.now_ms);
+    todo_model_turn_acked(&g.model, g.now_ms);
 }
 
 static void muse_error(void)
@@ -354,6 +367,19 @@ static lv_obj_t *ui_parent(void)
     return root;
 }
 
+/* The "Stay on" chip: the firmware turns screen auto-sleep off or on. */
+static void stay_on_changed(bool on)
+{
+    g.stay_on = on;
+    printf("[%7u] stay on: %s\n", g.now_ms, on ? "yes (auto-sleep off)" : "no (auto-sleep 2 min)");
+}
+
+static void hook_stay_on(void)
+{
+    todo_ui_set_stay_on(g.stay_on);
+    todo_ui_on_stay_on(stay_on_changed);
+}
+
 static void reboot(void)
 {
     printf("[%7u] reboot\n", g.now_ms);
@@ -369,6 +395,7 @@ static void reboot(void)
     }
     todo_ui_create(ui_parent(), &g.model);
     todo_ui_set_wifi(TODO_WIFI_CONNECTED);
+    hook_stay_on();
 }
 
 /* "2026-10-07 09:14" in America/Chicago. */
@@ -573,6 +600,14 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
                                                         : v;
             ok = todo_ui_type(label);
             run_for(30, real_time);
+        } else if (!strcmp(k, "expect_message_fits")) {
+            bool want = !strcmp(v, "true");
+            bool fits = todo_ui_message_fits();
+            check(fits == want, line_no, v, fits ? "true" : "false");
+        } else if (!strcmp(k, "expect_stay_on")) {
+            bool want = !strcmp(v, "true");
+            bool shown = todo_ui_stay_on();
+            check(g.stay_on == want && shown == want, line_no, v, g.stay_on ? "true" : "false");
         } else if (!strcmp(k, "expect_sheet")) {
             lv_point_t pt;
             bool open = todo_ui_point_for("sheet_add", &pt);
@@ -634,6 +669,8 @@ static bool run_scenario(const char *path, const char *out_dir, bool real_time)
             muse_reply(v);
         } else if (!strcmp(k, "turn_error")) {
             muse_error();
+        } else if (!strcmp(k, "turn_ack")) {
+            muse_ack();
         } else if (!strcmp(k, "auto_reply")) {
             snprintf(g.auto_reply, sizeof(g.auto_reply), "%s", strcmp(v, "off") ? v : "");
         } else if (!strcmp(k, "auto_reply_ms")) {
@@ -857,6 +894,7 @@ int main(int argc, char **argv)
     }
     todo_ui_create(ui_parent(), &g.model);
     todo_ui_set_wifi(TODO_WIFI_CONNECTED); /* scenarios change it with wifi= */
+    hook_stay_on();
     SDL_AddEventWatch(event_watch, NULL);
 
     bool ok = true;

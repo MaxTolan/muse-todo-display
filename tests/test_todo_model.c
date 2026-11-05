@@ -228,12 +228,14 @@ static void test_healthkit_backup_tap(void)
     CHECK_STR(F.last_turn, "[todo-display] Completed: 10,000 steps (id steps@1007) at 9:14 AM, "
                            "marked by hand before HealthKit caught up.");
 
-    /* HealthKit catches up mid-send: the local completion still wins until Muse replies. */
+    /* HealthKit catches up mid-send: Muse lists it done, so it's finished here too
+     * (the report already went; issue #10: nothing re-sends it). */
     CHECK(push("[{\"id\":\"steps@1007\",\"label\":\"10,000 steps\",\"source\":\"healthkit\",\"done\":true},"
                "{\"id\":\"protein@1007\",\"label\":\"180 g protein\",\"source\":\"myfitnesspal\"},"
                "{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\"}]"));
-    CHECK(state_of("steps@1007") == TODO_ROW_SENDING);
+    CHECK(state_of("steps@1007") == TODO_ROW_LEAVING);
     todo_model_turn_done(&M, T);
+    CHECK(F.sends == 1);
     run(TODO_LEAVE_MS + 40);
     CHECK(state_of("steps@1007") == TODO_ROW_HIDDEN);
     int done, total;
@@ -421,6 +423,107 @@ static void test_push_keeps_local_state(void)
     todo_model_turn_done(&M, T);
     run(1000);
     CHECK(todo_model_find(&M, "rosary@1007") == NULL);
+}
+
+/* Issue #10: one tap, one report, even when Muse's reply is slow. */
+static void test_ack_stops_resends(void)
+{
+    setup("ack_stops_resends");
+    push(DAY);
+    todo_model_tap(&M, "vit-am@1007", T);
+    run(TODO_UNDO_MS + 100);
+    CHECK(F.sends == 1);
+    CHECK(state_of("vit-am@1007") == TODO_ROW_SENDING);
+
+    /* Muse has it: delivered, out of the outbox, saved that way. */
+    todo_model_turn_acked(&M, T);
+    CHECK(state_of("vit-am@1007") == TODO_ROW_LEAVING);
+    CHECK(todo_model_outbox_count(&M) == 0);
+    char result[256];
+    CHECK(todo_model_list_result(&M, false, result, sizeof(result)));
+    CHECK(strstr(result, "vit-am@1007") == NULL);   /* not "pending" any more */
+
+    /* The agent thinks for minutes: no timeout re-send. */
+    run(TODO_TURN_TIMEOUT_MS + 30000);
+    CHECK(M.in_flight);
+    CHECK(F.sends == 1);
+    todo_model_turn_reply(&M, "Vitamins logged.");
+    todo_model_turn_done(&M, T);
+    CHECK_STR(M.message, "Vitamins logged.");
+    run(TODO_REPLY_TIMEOUT_MS);
+    CHECK(F.sends == 1);
+
+    /* A reply that never comes, or fails, after the ack: still nothing sent again. */
+    todo_model_tap(&M, "rosary@1007", T);
+    run(TODO_UNDO_MS + 100);
+    CHECK(F.sends == 2);
+    todo_model_turn_acked(&M, T);
+    run(TODO_REPLY_TIMEOUT_MS + 1000);
+    CHECK(!M.in_flight);
+    run(10 * 60 * 1000);
+    CHECK(F.sends == 2);
+    CHECK(M.message[0] == '\0' || strstr(M.message, "reach") == NULL);
+
+    todo_model_tap(&M, "steps@1007", T);   /* HealthKit, ticked by hand */
+    run(TODO_UNDO_MS + 100);
+    CHECK(F.sends == 3);
+    todo_model_turn_acked(&M, T);
+    todo_model_turn_error(&M, T);
+    run(10 * 60 * 1000);
+    CHECK(F.sends == 3);
+    CHECK(todo_model_outbox_count(&M) == 0);
+
+    /* Without an ack, a timeout still retries (the report may not have arrived). */
+    setup("ack_stops_resends/no_ack");
+    push(DAY);
+    todo_model_tap(&M, "vit-am@1007", T);
+    run(TODO_UNDO_MS + 100);
+    run(TODO_TURN_TIMEOUT_MS + 11000);
+    CHECK(F.sends == 2);
+}
+
+/* Issue #10: a list from Muse marking a waiting completion done stops its re-sends. */
+static void test_done_push_stops_resends(void)
+{
+    setup("done_push_stops_resends");
+    push(DAY);
+    todo_model_tap(&M, "vit-am@1007", T);
+    run(TODO_UNDO_MS + 100);
+    CHECK(F.sends == 1);
+    todo_model_turn_error(&M, T);   /* no word back: queued to try again */
+    CHECK(state_of("vit-am@1007") == TODO_ROW_QUEUED);
+
+    /* But Muse got it, and pushes the list with it done. */
+    const char *done_day =
+        "[{\"id\":\"vit-am@1007\",\"label\":\"Vitamins AM\",\"source\":\"manual\",\"done\":true},"
+        "{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\"},"
+        "{\"id\":\"pt@1007\",\"label\":\"PT exercises\",\"source\":\"manual\"}]";
+    CHECK(push(done_day));
+    CHECK(state_of("vit-am@1007") == TODO_ROW_LEAVING);
+    CHECK(todo_model_outbox_count(&M) == 0);
+    char result[256];
+    CHECK(todo_model_list_result(&M, false, result, sizeof(result)));
+    CHECK(strstr(result, "vit-am@1007") == NULL);
+    run(10 * 60 * 1000);
+    CHECK(F.sends == 1);
+    CHECK(state_of("vit-am@1007") == TODO_ROW_HIDDEN);
+
+    /* Same while the report is in flight: the turn's later result changes nothing. */
+    todo_model_tap(&M, "rosary@1007", T);
+    run(TODO_UNDO_MS + 100);
+    CHECK(F.sends == 2);
+    CHECK(push("[{\"id\":\"vit-am@1007\",\"label\":\"Vitamins AM\",\"source\":\"manual\",\"done\":true},"
+               "{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\",\"done\":true},"
+               "{\"id\":\"pt@1007\",\"label\":\"PT exercises\",\"source\":\"manual\"}]"));
+    CHECK(state_of("rosary@1007") == TODO_ROW_LEAVING);
+    todo_model_turn_error(&M, T);
+    run(10 * 60 * 1000);
+    CHECK(F.sends == 2);
+
+    /* A tap still in its undo window keeps local state: the owner can undo it. */
+    todo_model_tap(&M, "pt@1007", T);
+    CHECK(push("[{\"id\":\"pt@1007\",\"label\":\"PT exercises\",\"source\":\"manual\",\"done\":true}]"));
+    CHECK(state_of("pt@1007") == TODO_ROW_UNDO);
 }
 
 static void test_muse_marks_done(void)
@@ -922,6 +1025,8 @@ int main(void)
     test_give_up();
     test_events_without_turn_ignored();
     test_push_keeps_local_state();
+    test_ack_stops_resends();
+    test_done_push_stops_resends();
     test_muse_marks_done();
     test_celebration();
     test_dance();

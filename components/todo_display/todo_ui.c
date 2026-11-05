@@ -52,6 +52,7 @@
 #define CONFETTI_N 28
 #define SHEET_IDLE_MS 60000u /* close the add-task sheet if left alone */
 #define ADD_BTN_W 60
+#define PILL_W (s.portrait ? 172 : 200)
 #define DANCER_PX 128
 #define DANCER_RISE_MS 220.0f
 #define DANCER_DROP_MS 260.0f
@@ -112,6 +113,11 @@ static TODO_EXT_BSS struct {
     lv_obj_t *idle_date;
     lv_obj_t *wifi_top;   /* Wi-Fi icon beside the clock */
     lv_obj_t *wifi_idle;  /* and beside the date on the idle screen */
+    lv_obj_t *stay;       /* "Stay on" chip beside the clock */
+    lv_obj_t *stay_label;
+    int stay_shown;       /* -1 before the first update */
+    bool stay_on;
+    void (*stay_cb)(bool on);
     todo_wifi_t wifi;
     lv_obj_t *idle_sub;
 
@@ -318,6 +324,15 @@ static void undo_clicked(lv_event_t *e)
 {
     row_t *r = lv_event_get_user_data(e);
     todo_model_undo(s.model, r->id, s.now);
+}
+
+static void stay_clicked(lv_event_t *e)
+{
+    (void)e;
+    s.stay_on = !s.stay_on;
+    if (s.stay_cb) {
+        s.stay_cb(s.stay_on);
+    }
 }
 
 static void bar_clicked(lv_event_t *e)
@@ -676,8 +691,25 @@ static void build_top(void)
     lv_label_set_text(s.wifi_top, LV_SYMBOL_WIFI);
     show(s.wifi_top, false);
 
+    /* Keep the screen on (plugged in) or let it sleep (on battery). The board
+     * can't sense USB power, so the owner says (owner, Oct 21; issue #9). */
+    s.stay = box(clock_row);
+    lv_obj_set_size(s.stay, LV_SIZE_CONTENT, 32);
+    lv_obj_set_style_radius(s.stay, 16, 0);
+    lv_obj_set_style_pad_hor(s.stay, 12, 0);
+    lv_obj_set_style_border_width(s.stay, 2, 0);
+    lv_obj_set_style_bg_color(s.stay, col(C_CREAM), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(s.stay, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_set_ext_click_area(s.stay, 14); /* small chip, generous target */
+    lv_obj_add_flag(s.stay, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s.stay, stay_clicked, LV_EVENT_CLICKED, NULL);
+    s.stay_label = text(s.stay, todo_font(16), C_MUTED);
+    lv_obj_center(s.stay_label);
+    s.stay_shown = -1;
+
     s.pill = box(s.top);
-    lv_obj_set_size(s.pill, 200, 48);
+    /* Narrower in portrait, leaving the clock row room for the Stay on chip. */
+    lv_obj_set_size(s.pill, PILL_W, 48);
     if (s.portrait) {
         /* Two rows: date and +, then the time and the progress pill. */
         lv_obj_align(s.pill, LV_ALIGN_BOTTOM_RIGHT, 0, -10);
@@ -843,11 +875,13 @@ static void build_bar(void)
     s.bar_muse = todo_mascot_create(head, 128);
     lv_obj_set_pos(s.bar_muse, -26, -20);
 
+    /* The whole message, however many lines it takes (issue #11): the longest
+     * (TODO_MESSAGE_MAX, 280 characters) is ~11 lines in portrait, ~6 in
+     * landscape, and the bar grows to fit. */
     s.bar_text = text(s.bar, todo_font(24), C_PLUM_TEXT);
     lv_obj_set_width(s.bar_text, lv_pct(100));
-    lv_label_set_long_mode(s.bar_text, LV_LABEL_LONG_MODE_DOTS);
+    lv_label_set_long_mode(s.bar_text, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_height(s.bar_text, LV_SIZE_CONTENT);
-    lv_obj_set_style_max_height(s.bar_text, 2 * lv_font_get_line_height(todo_font(24)), 0);
     lv_obj_align(s.bar_text, LV_ALIGN_LEFT_MID, 0, 0);
     show(s.bar, false);
 }
@@ -1151,7 +1185,7 @@ static void update_top(todo_screen_t screen)
     todo_model_progress(s.model, &done, &total);
     snprintf(buf, sizeof(buf), "%d of %d done", done, total);
     set_text(s.pill_label, buf);
-    set_w(s.pill_fill, total ? 200 * done / total : 0);
+    set_w(s.pill_fill, total ? PILL_W * done / total : 0);
     show(s.pill, s.model->have_list);
     show(s.top, screen != TODO_SCREEN_IDLE);
 }
@@ -1193,13 +1227,15 @@ static void update_bar(bool draw)
     }
     s.bar_on = want;
     show(s.bar, want);
-    set_pad_bottom(s.main, want ? 108 : 0);
     if (!want) {
+        set_pad_bottom(s.main, 0);
         return;
     }
     float t = ease_out(since(s.bar_ms) / BAR_SLIDE_MS);
     lv_obj_update_layout(s.bar);
     int32_t h = lv_obj_get_height(s.bar);
+    /* Room under the list to scroll its last rows clear of the bar, however tall. */
+    set_pad_bottom(s.main, h + 32);
     /* Slides up from below the screen to rest 14 px above the bottom edge. */
     set_xy(s.bar, 16, SCREEN_H - (int32_t)lroundf((float)(h + 14) * t));
     if (draw) {
@@ -1367,6 +1403,35 @@ static void update_wifi(void)
     }
 }
 
+void todo_ui_set_stay_on(bool on)
+{
+    s.stay_on = on;
+}
+
+void todo_ui_on_stay_on(void (*cb)(bool on))
+{
+    s.stay_cb = cb;
+}
+
+bool todo_ui_stay_on(void)
+{
+    return s.stay_on;
+}
+
+/* Filled butter when the screen stays on; a quiet outline when it may sleep. */
+static void update_stay(void)
+{
+    if (s.stay_shown == (int)s.stay_on) {
+        return;
+    }
+    s.stay_shown = s.stay_on;
+    lv_obj_set_style_bg_color(s.stay, col(C_BUTTER), 0);
+    lv_obj_set_style_bg_opa(s.stay, s.stay_on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_color(s.stay, col(s.stay_on ? C_BUTTER : C_FAINT), 0);
+    lv_obj_set_style_text_color(s.stay_label, col(s.stay_on ? C_PLUM_TEXT : C_MUTED), 0);
+    set_text(s.stay_label, s.stay_on ? LV_SYMBOL_EYE_OPEN " Stay on" : "Auto-off");
+}
+
 void todo_ui_set_idle_hint(const char *hint)
 {
     set_text(s.idle_sub, hint && hint[0] ? hint : "Muse will send it over soon.");
@@ -1393,6 +1458,7 @@ void todo_ui_update(uint32_t now_ms)
 
     update_top(screen);
     update_wifi();
+    update_stay();
     /* Day finished but ongoing tasks remain: keep them on screen under a banner. */
     bool done_mode = screen == TODO_SCREEN_ALL_DONE && todo_model_ongoing_visible(s.model) > 0;
     show(s.idle, screen == TODO_SCREEN_IDLE);
@@ -1541,6 +1607,30 @@ int32_t todo_ui_list_scroll_y(void)
     return lv_obj_get_scroll_y(s.list);
 }
 
+bool todo_ui_message_fits(void)
+{
+    if (!s.bar_on) {
+        return true;
+    }
+    lv_obj_update_layout(s.bar);
+    const char *txt = lv_label_get_text(s.bar_text);
+    const lv_font_t *font = lv_obj_get_style_text_font(s.bar_text, LV_PART_MAIN);
+    lv_point_t size;
+    lv_text_get_size(&size, txt, font, lv_obj_get_style_text_letter_space(s.bar_text, LV_PART_MAIN),
+                     lv_obj_get_style_text_line_space(s.bar_text, LV_PART_MAIN), lv_obj_get_content_width(s.bar_text),
+                     LV_TEXT_FLAG_NONE);
+    lv_area_t text_area, bar_area, screen = { 0, 0, SCREEN_W - 1, SCREEN_H - 1 };
+    lv_obj_get_coords(s.bar_text, &text_area);
+    lv_obj_get_coords(s.bar, &bar_area);
+    /* All of the wrapped text has room in the label, the label in the bar, and the bar on screen
+     * once it has slid up. */
+    bool label_ok = lv_obj_get_content_height(s.bar_text) >= size.y;
+    bool in_bar = text_area.y1 >= bar_area.y1 && text_area.y2 <= bar_area.y2;
+    int32_t h = lv_area_get_height(&bar_area);
+    bool on_screen = h + 14 <= lv_area_get_height(&screen) - TOP_H;
+    return label_ok && in_bar && on_screen;
+}
+
 bool todo_ui_point_for(const char *target, lv_point_t *pt)
 {
     lv_obj_t *o = NULL;
@@ -1560,6 +1650,8 @@ bool todo_ui_point_for(const char *target, lv_point_t *pt)
         o = s.sheet_open ? s.sheet_ongoing : NULL;
     } else if (!strcmp(target, "message")) {
         o = s.bar;
+    } else if (!strcmp(target, "stay_on")) {
+        o = s.stay;
     }
     if (!o || lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) {
         return false;

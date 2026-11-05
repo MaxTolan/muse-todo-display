@@ -60,7 +60,7 @@ clock (fixed to 2026-10-07 09:14 America/Chicago unless `clock=` sets it).
 | `set_ongoing` / `set_ongoing_file` | `todo.set_ongoing` items (the ongoing tasks), same forms |
 | `set_list_expect_error` | JSON that must be rejected |
 | `message` | `todo.show_message` text |
-| `tap` | `row:<id>`, `undo:<id>`, `message`, `add`, `sheet_add`, `sheet_cancel`, `sheet_ongoing` (a real touch at that spot) |
+| `tap` | `row:<id>`, `undo:<id>`, `message`, `add`, `sheet_add`, `sheet_cancel`, `sheet_ongoing`, `stay_on` (a real touch at that spot) |
 | `tap_at` | `x,y`: a touch at exact screen coordinates |
 | `drag` | `x1,y1,x2,y2`: a finger drag over ~300 ms (scrolling) |
 | `expect_scrolled`, `expect_scrolled_max` | The list is scrolled down at least / at most N px |
@@ -69,8 +69,12 @@ clock (fixed to 2026-10-07 09:14 America/Chicago unless `clock=` sets it).
 | `expect_renders`, `expect_not_renders` | Every character of the text does / doesn't have a glyph in the screen's fonts |
 | `type` | Type text on the add-task keyboard, key by key (letters, digits, common punctuation) |
 | `key` | Press one keyboard key: a label, or `backspace`, `ok`, `enter`, `close` |
+| `expect_message_fits` | `true` / `false`: the message bar shows all of its text, and fits on screen |
+| `expect_stay_on` | `true` / `false`: the "Stay on" chip and the setting it changes (screen auto-sleep off / 2 min) |
+| `press_info` | `x,y`: print what a press there lands on and every row's state |
 | `expect_sheet` | `open` / `closed`: the add-task sheet |
 | `reply` / `turn_error` | Muse answers / fails the turn in flight |
+| `turn_ack` | Muse acknowledges the turn in flight (`@chat ack`): delivered, reply still to come |
 | `auto_reply`, `auto_reply_ms` | Reply text Muse sends automatically (`off` to stop), and the delay |
 | `advance` | Run for N ms, drawing every 10 ms frame |
 | `wait` | Skip ahead N ms in 1 s steps without drawing (for waits of minutes) |

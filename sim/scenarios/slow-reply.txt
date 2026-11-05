@@ -1,0 +1,28 @@
+# Issue #10: one tap, one report, even when Muse takes minutes to reply. Once
+# Muse acknowledges the report it's delivered; the slow reply only adds text.
+clock=2026-10-23 17:39
+list_date=Friday, October 23
+set_list=[{"id":"vitamins-pm-2026-10-23","label":"Evening vitamins","source":"manual"},{"id":"vanguard-address-2026-10-23","label":"Vanguard address","source":"manual"}]
+auto_reply=off
+advance=200
+tap=row:vitamins-pm-2026-10-23
+advance=5200
+expect_turns=1
+expect_state=vitamins-pm-2026-10-23 sending
+turn_ack=1
+advance=600
+expect_state=vitamins-pm-2026-10-23 hidden
+
+# Muse thinks for 90 s, past the 60 s it used to wait before sending again.
+advance=90000
+expect_turns=1
+reply=Evening vitamins logged.
+expect_message=Evening vitamins logged.
+advance=15000
+expect_turns=1
+
+# A list from Muse with it done changes nothing either.
+set_list=[{"id":"vitamins-pm-2026-10-23","label":"Evening vitamins","source":"manual","done":true},{"id":"vanguard-address-2026-10-23","label":"Vanguard address","source":"manual"}]
+advance=15000
+expect_turns=1
+expect_state=vitamins-pm-2026-10-23 hidden

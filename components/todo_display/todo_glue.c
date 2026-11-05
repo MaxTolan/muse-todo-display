@@ -35,6 +35,7 @@
 #include "muse_ext.h"
 #include "muse_link.h"
 #include "muse_settings.h"
+#include "muse_state.h"
 #include "muse_wifi.h"
 
 #include "todo_model.h"
@@ -46,7 +47,10 @@ static const char *TAG = "todo";
 
 #define NVS_NS "todo"
 #define NVS_STATE "state"
-#define NVS_SETUP "setup" /* first-boot defaults applied */
+#define NVS_SETUP "setup" /* which first-boot defaults are applied (SETUP_*) */
+#define SETUP_SLEEP_OFF 1   /* old firmware: auto-sleep off */
+#define SETUP_SLEEP_2MIN 2  /* auto-sleep after 2 minutes (issue #9) */
+#define AUTO_SLEEP_S 120
 #define FRAME_MS 40
 #define TIMEZONE "CST6CDT,M3.2.0,M11.1.0" /* America/Chicago */
 
@@ -160,8 +164,10 @@ static void restore(void)
     nvs_close(h);
 }
 
-/* A desk display stays on: turn auto-sleep off once, on the first boot of this
- * firmware. The owner can still set it in the SDK's settings afterwards. */
+/* On battery the lit screen lasts 3-5 hours, so the screen sleeps after 2
+ * minutes without a touch (issue #9). Applied once, also over the old
+ * firmware's "never sleep"; afterwards the "Stay on" chip (or the SDK's own
+ * settings) decides. */
 static void first_boot_defaults(void)
 {
     nvs_handle_t h;
@@ -169,13 +175,32 @@ static void first_boot_defaults(void)
         return;
     }
     uint8_t done = 0;
-    if (nvs_get_u8(h, NVS_SETUP, &done) != ESP_OK || !done) {
-        muse_settings_set_sleep_s(0);
-        nvs_set_u8(h, NVS_SETUP, 1);
+    if (nvs_get_u8(h, NVS_SETUP, &done) != ESP_OK || done < SETUP_SLEEP_2MIN) {
+        muse_settings_set_sleep_s(AUTO_SLEEP_S);
+        nvs_set_u8(h, NVS_SETUP, SETUP_SLEEP_2MIN);
         nvs_commit(h);
-        ESP_LOGI(TAG, "first boot: screen auto-sleep off");
+        ESP_LOGI(TAG, "first boot: screen auto-sleep after %d s", AUTO_SLEEP_S);
     }
     nvs_close(h);
+}
+
+/* The "Stay on" chip: the board can't sense USB power, so the owner says
+ * when it's plugged in. It's the SDK's sleep setting, so it survives reboots
+ * and matches the settings page. */
+static void stay_on_changed(bool on)
+{
+    muse_settings_set_sleep_s(on ? 0 : AUTO_SLEEP_S);
+    muse_state_poke(); /* a full 2 minutes from the tap */
+    ESP_LOGI(TAG, "screen %s", on ? "stays on" : "sleeps after 2 minutes idle");
+}
+
+/* A push from Muse lights a dark screen, so it doesn't land unseen (issue #9).
+ * The SDK's idle timer turns it off again. */
+static void wake_for_push(void)
+{
+    if (muse_state_asleep()) {
+        muse_state_set_asleep(false);
+    }
 }
 
 /* ---- chat turn results -------------------------------------------------------- */
@@ -200,6 +225,12 @@ static void chat_event_locked(const char *type, const char *text)
 {
     if (!s_turn_active) {
         return; /* someone else's typed turn (tools/muse/chat.py) */
+    }
+    if (!strcmp(type, "ack")) {
+        /* Muse has the report: never send it again, however slow the reply (issue #10). */
+        ESP_LOGI(TAG, "Muse has the report");
+        todo_model_turn_acked(&s_model, now_ms());
+        return;
     }
     if (!strcmp(type, "error")) {
         if (s_in_send) {
@@ -350,6 +381,7 @@ static cJSON *command(const char *name, cJSON *params)
             return result_error(err[0] ? err : "busy");
         }
         ESP_LOGI(TAG, "todo.set_list: %s", payload);
+        wake_for_push();
         return result_ok(cJSON_Parse(payload));
     }
     if (!strcmp(name, "todo.set_ongoing")) {
@@ -371,6 +403,7 @@ static cJSON *command(const char *name, cJSON *params)
             return result_error(err[0] ? err : "busy");
         }
         ESP_LOGI(TAG, "todo.set_ongoing: %s", payload);
+        wake_for_push();
         return result_ok(cJSON_Parse(payload));
     }
     if (!strcmp(name, "todo.show_message")) {
@@ -384,6 +417,7 @@ static cJSON *command(const char *name, cJSON *params)
             return result_error(err[0] ? err : "busy");
         }
         ESP_LOGI(TAG, "todo.show_message: %s", text);
+        wake_for_push();
         return result_ok(NULL);
     }
     return NULL;
@@ -452,8 +486,10 @@ static void frame(lv_timer_t *t)
         }
         ESP_LOGI(TAG, "todo screen %s", visible ? "shown" : "hidden for pairing");
     }
-    if (visible) {
+    /* Dark: keep the model ticking (sends, undo windows) but skip drawing. */
+    if (visible && !muse_state_asleep()) {
         update_hint();
+        todo_ui_set_stay_on(muse_settings_sleep_s() == 0);
         muse_wifi_status_t w;
         muse_wifi_status(&w);
         todo_ui_set_wifi(w.state == MUSE_WIFI_CONNECTED    ? TODO_WIFI_CONNECTED
@@ -484,6 +520,7 @@ static void ui_build(lv_obj_t *face)
     lv_obj_remove_flag(s_root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_opa(s_root, LV_OPA_COVER, 0);
     todo_ui_create(s_root, &s_model);
+    todo_ui_on_stay_on(stay_on_changed);
     s_visible = true;
     lv_timer_create(frame, FRAME_MS, NULL);
     ESP_LOGI(TAG, "todo screen built");

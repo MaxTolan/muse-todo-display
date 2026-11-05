@@ -42,12 +42,20 @@ Previews: `docs/previews/p*.png` and `contact-sheet-portrait.png` (simulator `--
 - **Top bar:** current day/date and a small count ("5 of 9 done"). A small Wi-Fi icon sits beside the
   time (and beside the date on the idle screen): mint when connected, blinking while
   connecting, peach with no Wi-Fi (owner, Oct 13). Time comes from SNTP,
-  time zone America/Chicago.
+  time zone America/Chicago. After the Wi-Fi icon, a **Stay on** chip: "Auto-off" (outline)
+  means the screen goes dark after 2 minutes without a touch; tapped, it fills butter with an
+  eye and reads "Stay on", and the screen never sleeps. The board can't sense USB power, so the
+  owner taps it when plugging in (owner, Oct 21; issue #9). It isn't on the idle screen.
+- **Screen sleep:** the SDK's own sleep (backlight off, everything else running: Wi-Fi, pushes,
+  the outbox). Any touch wakes it to exactly what was showing, and that first tap only wakes it.
+  A list or message from Muse also lights it, for another 2 minutes.
 - **Main area:** scrollable checklist. Each row: a large checkbox on the left, the item label
   in large type. Items from a non-manual source show a small tag with the source (e.g. "auto"
   or "HealthKit").
 - **Message bar** (bottom): shows Muse's replies and messages Muse sends to the screen.
-  One message at a time, plain text, wraps to at most two lines (truncate with "…" beyond that).
+  One message at a time, plain text, always shown whole: the bar grows to fit every line
+  (issue #11; the longest message, 280 characters, is about 11 lines in portrait and 6 in
+  landscape), and the list scrolls its last rows clear of it.
   It stays until replaced by a newer message or until its time is up, then clears:
   **30 seconds** for a message under 50 characters, **5 minutes** otherwise (owner's choice,
   Oct 7). Tapping it clears it sooner.
