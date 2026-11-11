@@ -53,7 +53,7 @@ bool todo_ui_stay_on(void);
 /* Tests: the message bar shows all of its text (issue #11); true when there's no bar. */
 bool todo_ui_message_fits(void);
 
-/* Have the little top-hat Muse peek in from the top bar for a few seconds. */
+/* Have the little Chief peek in from the top bar for a few seconds. */
 void todo_ui_peek(uint32_t now_ms);
 
 /*

@@ -2,7 +2,7 @@
  * Todo display screen: see todo_ui.h and docs/03-ui-spec.md.
  *
  * Cozy berry theme to sit with the pink stand: deep plum background, soft
- * rounded cards, pink checkboxes, cream type, and a little top-hat Muse.
+ * rounded cards, pink checkboxes, cream type, and a little Chief in a feather headdress.
  */
 #include "todo_ui.h"
 
@@ -402,10 +402,10 @@ static row_t *row_create(const todo_item_t *it)
     const lv_font_t *font = r->ongoing ? todo_font(24) : todo_font(28);
     r->label = text(row, font, C_CREAM);
     lv_obj_set_flex_grow(r->label, 1);
-    lv_label_set_long_mode(r->label, LV_LABEL_LONG_MODE_DOTS);
+    /* Labels wrap in full: a long task takes as many lines as it needs and
+     * the row grows with it (owner's call, Nov 11: legibility over space). */
+    lv_label_set_long_mode(r->label, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_height(r->label, LV_SIZE_CONTENT);
-    /* Two lines at most; longer labels end in an ellipsis. */
-    lv_obj_set_style_max_height(r->label, 2 * lv_font_get_line_height(font), 0);
 
     r->side = box(row);
     lv_obj_set_size(r->side, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -794,7 +794,7 @@ static void build_done(void)
         lv_obj_set_flex_align(col_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_text_align(col_box, LV_TEXT_ALIGN_CENTER, 0);
     } else {
-        lv_obj_align(s.done_muse, LV_ALIGN_LEFT_MID, 70, -10);
+        lv_obj_align(s.done_muse, LV_ALIGN_LEFT_MID, 70, 22);
         lv_obj_align(col_box, LV_ALIGN_LEFT_MID, 360, -10);
     }
     lv_obj_set_flex_flow(col_box, LV_FLEX_FLOW_COLUMN);
@@ -824,7 +824,7 @@ static void build_party(void)
         s.confetti[i] = c;
     }
     s.party_muse = todo_mascot_create(s.party, 256);
-    lv_obj_align(s.party_muse, LV_ALIGN_CENTER, 0, -26);
+    lv_obj_align(s.party_muse, LV_ALIGN_CENTER, 0, 8);
     s.party_title = text(s.party, todo_font(48), C_BUTTER);
     lv_label_set_text(s.party_title, "All done!");
     lv_obj_align(s.party_title, LV_ALIGN_BOTTOM_MID, 0, -18);
@@ -871,7 +871,7 @@ static void build_bar(void)
     lv_obj_set_style_bg_opa(head, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(head, col(C_BG), 0);
     lv_obj_align(head, LV_ALIGN_LEFT_MID, -92, 0);
-    /* Frame just the face and hat. */
+    /* Frame just the face and headdress. */
     s.bar_muse = todo_mascot_create(head, 128);
     lv_obj_set_pos(s.bar_muse, -26, -20);
 
@@ -1207,7 +1207,7 @@ static void update_peek(bool draw)
     float up = t < 400 ? ease_out(t / 400) : (t > PEEK_MS - 400 ? 1 - ease_out((t - (PEEK_MS - 400)) / 400) : 1);
     set_xy(s.peek_muse, lv_obj_get_style_x(s.peek_muse, LV_PART_MAIN), TOP_H - (int32_t)lroundf(78 * up));
     if (draw) {
-        todo_mascot_pose_t pose = { .t = s.now / 1000.0f, .happy = 0, .hat_lift = 0, .hat_tilt = 0 };
+        todo_mascot_pose_t pose = { .t = s.now / 1000.0f, .happy = 0, .crest_lift = 0, .crest_tilt = 0 };
         todo_mascot_draw(s.peek_muse, &pose);
     }
 }
@@ -1269,7 +1269,7 @@ static void set_split(bool split)
             lv_obj_align(s.done_muse_small, LV_ALIGN_TOP_MID, 0, 14);
             lv_obj_align(s.done_col, LV_ALIGN_TOP_MID, 0, 166);
         } else {
-            lv_obj_align(s.done_muse_small, LV_ALIGN_LEFT_MID, 150, 0);
+            lv_obj_align(s.done_muse_small, LV_ALIGN_LEFT_MID, 150, 10);
             lv_obj_align(s.done_col, LV_ALIGN_LEFT_MID, 310, 0);
         }
     } else if (s.portrait) {
@@ -1320,9 +1320,9 @@ static void update_party(bool draw)
         lv_obj_set_style_transform_rotation(s.confetti[i], (int32_t)lroundf(fmodf(t * 540.0f + i * 40.0f, 3600.0f)), 0);
         show(s.confetti[i], y < h);
     }
-    /* Bounce, and a hat tip in the middle. */
+    /* Bounce, and a headdress tip in the middle. */
     float bounce = fabsf(sinf(t * PI_F * 2.5f)) * 22.0f * (1 - clamp01((t - 1.5f) / 0.5f));
-    lv_obj_align(s.party_muse, LV_ALIGN_CENTER, 0, -26 - (int32_t)lroundf(bounce));
+    lv_obj_align(s.party_muse, LV_ALIGN_CENTER, 0, 8 - (int32_t)lroundf(bounce));
     float tip = clamp01((t - 0.35f) / 0.9f);
     float tip_amt = sinf(tip * PI_F);
     lv_obj_set_style_opa(s.party_title, (lv_opa_t)lroundf(255 * clamp01((t - 0.3f) / 0.4f)), 0);
@@ -1333,8 +1333,8 @@ static void update_party(bool draw)
         todo_mascot_pose_t pose = {
             .t = s.now / 1000.0f,
             .happy = 1.0f,
-            .hat_lift = 4.0f * tip_amt,
-            .hat_tilt = -0.9f * tip_amt,
+            .crest_lift = 4.0f * tip_amt,
+            .crest_tilt = -0.9f * tip_amt,
         };
         todo_mascot_draw(s.party_muse, &pose);
     }
@@ -1354,7 +1354,7 @@ static void update_dancer(todo_screen_t screen, bool draw)
                                                     : 1);
     /* Where its feet rest: on the bar's top edge, or just below the screen edge. */
     int32_t floor_y = s.bar_on ? lv_obj_get_y(s.bar) + 22 : SCREEN_H + 6;
-    int32_t visible = DANCER_PX + 2; /* hat to feet */
+    int32_t visible = DANCER_PX + 2; /* feathers to feet */
     int32_t top = floor_y - visible;
     /* Step left of any Undo button it would cover (the tapped row is often
      * the bottom one, right where Muse pops up). */
@@ -1376,8 +1376,8 @@ static void update_dancer(todo_screen_t screen, bool draw)
         todo_mascot_pose_t pose = {
             .t = s.now / 1000.0f,
             .happy = 1.0f,
-            .hat_lift = 1.5f * fabsf(sinf(sec * 7.0f)),
-            .hat_tilt = 0.35f * sinf(sec * 14.0f),
+            .crest_lift = 1.5f * fabsf(sinf(sec * 7.0f)),
+            .crest_tilt = 0.35f * sinf(sec * 14.0f),
         };
         todo_mascot_draw(s.dancer, &pose);
     }

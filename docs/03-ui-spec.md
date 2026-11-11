@@ -11,7 +11,7 @@ within the calm/glanceable rules:
 - Soft, friendly shapes: rounded rows and checkboxes, chunky type, a warm palette that goes
   with the pink stand.
 - Small moments of joy: a squishy checkbox press, a happy strike-through, rows that wave
-  goodbye or hop away when they leave, a tiny top-hat Muse peeking in now and then.
+  goodbye or hop away when they leave, a tiny Chief in his war bonnet peeking in now and then.
 - Personality in the copy: friendly idle text ("waiting for today's list"), a cheerful
   "all done" screen.
 - Keep it light on motion: animations are short, never loop forever over the list, and never
@@ -50,7 +50,9 @@ Previews: `docs/previews/p*.png` and `contact-sheet-portrait.png` (simulator `--
   the outbox). Any touch wakes it to exactly what was showing, and that first tap only wakes it.
   A list or message from Muse also lights it, for another 2 minutes.
 - **Main area:** scrollable checklist. Each row: a large checkbox on the left, the item label
-  in large type. Items from a non-manual source show a small tag with the source (e.g. "auto"
+  in large type. Labels wrap in full: a long item takes as many lines as it needs and the row
+  grows with it, so nothing is ever cut off (owner's call, Nov 11: legibility over space).
+  Items from a non-manual source show a small tag with the source (e.g. "auto"
   or "HealthKit").
 - **Message bar** (bottom): shows Muse's replies and messages Muse sends to the screen.
   One message at a time, plain text, always shown whole: the bar grows to fit every line
@@ -101,8 +103,8 @@ locked (owner, Oct 15).
 
 ## Happy dance on every completion (issue #1)
 
-- Each completion gets a two-second happy dance from a small top-hat Muse (the avatar's
-  happy pose: hop, ^ ^ eyes, arms up, pixel hearts, with a wiggling hat).
+- Each completion gets a two-second happy dance from a small Chief (the avatar's
+  happy pose: hop, ^ ^ eyes, arms up, pixel hearts, with a wiggling headdress).
 - It starts at the tap (not when the undo window ends), so it feels instant; Undo stops it.
   Items Muse marks done (HealthKit etc.) dance too. Another completion while it's dancing
   restarts the two seconds rather than stacking dancers.
@@ -113,9 +115,10 @@ locked (owner, Oct 15).
 
 ## Celebration when everything is done (issue #1)
 
-- When the last open item becomes done (by tap or by Muse), play a two-second top-hat Muse
-  celebration animation (the agent's avatar: fuzzy form, black top hat — keep it simple, e.g. a
-  bouncing hat-tip). Then show an "all done" state.
+- When the last open item becomes done (by tap or by Muse), play a two-second Chief
+  celebration animation (the agent's avatar: fuzzy form in a war bonnet — a crown of
+  blue, red and near-black feathers on a beaded browband — keep it simple, e.g. a
+  bouncing headdress tip). Then show an "all done" state.
 - It plays once per transition to "nothing left open". If a later push adds open items, the list
   comes back; completing those plays the celebration again.
 - A push that arrives with everything already done shows "all done" without the animation.
@@ -178,7 +181,7 @@ Non-manual items show a source tag).
 | 40 g fiber | `myfitnesspal` | Same |
 | Dated todos/reminders | any | One-off items Muse includes (e.g. "return book to UPS") |
 
-Long item names must wrap or truncate gracefully — never overflow the row.
+Long item names wrap in full — never truncated, never overflowing the row.
 
 ## What NOT to build
 

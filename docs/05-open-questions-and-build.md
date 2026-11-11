@@ -5,7 +5,7 @@
 2. **Scheduled command calls**: does Muse call a device command on its own schedule? Answered
    by the spike in `04-agent-integration.md`.
 3. ~~Task entry (issue #2)~~ — decided Oct 9: on-screen keyboard, see below.
-4. **Celebration artwork**: the two-second top-hat Muse animation is specified; the exact
+4. **Celebration artwork**: the two-second Chief animation is specified; the exact
    artwork is up to whoever implements it — keep it simple and charming.
 5. ~~Code location~~ — decided Oct 7, see below.
 6. ~~Simulator~~ — decided Oct 7, see below.

@@ -75,7 +75,7 @@ pushes. New item sources need no firmware change (see the `source` field in `04`
     Plain C + cJSON, no LVGL/ESP-IDF, so it's unit-tested on the host.
   - `todo_ui.c` — the LVGL 9.5 screen. Renders the model; owns no state; all animation is
     driven by the time passed in, so scripted runs are pixel-identical every time.
-  - `todo_mascot.c` — the SDK's pixel Muse (`avatar/muse_pixel.c`) with a pixel top hat.
+  - `todo_mascot.c` — the SDK's pixel Muse (`avatar/muse_pixel.c`) wearing Chief's current look: a war bonnet (feather crown, beaded browband, rosettes and fur drops).
 - `sim/` — 800x480 SDL simulator (owner decision: our own sim, no SDK changes).
 - `tests/` — model unit tests (`test_todo_model.c`) and simulator scenario tests (`test_sim.py`).
 - `tools/sim.sh` — build / test / run / render previews.
