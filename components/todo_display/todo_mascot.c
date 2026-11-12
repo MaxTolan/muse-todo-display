@@ -85,6 +85,9 @@ typedef struct {
     lv_draw_buf_t *crest_buf;
     lv_obj_t *body;
     lv_obj_t *crest;
+    /* The browband's ends, steadied: the head's outline wobbles a pixel
+     * from frame to frame, and the rosettes and crown hang off these. */
+    int band_l, band_r;
 } mascot_t;
 
 static uint16_t rgb565(uint32_t c)
@@ -139,6 +142,7 @@ lv_obj_t *todo_mascot_create(lv_obj_t *parent, int px)
     }
     m->px = px;
     m->cell = px / MUSE_PX_W;
+    m->band_l = m->band_r = -1;
     m->body_buf = lv_draw_buf_create((uint32_t)px, (uint32_t)px, LV_COLOR_FORMAT_RGB565A8, LV_STRIDE_AUTO);
     m->crest_buf = lv_draw_buf_create((uint32_t)px, (uint32_t)px, LV_COLOR_FORMAT_RGB565A8, LV_STRIDE_AUTO);
     if (!m->body_buf || !m->crest_buf) {
@@ -331,10 +335,32 @@ static void draw_rosette(mascot_t *m, int x, int y, int out)
  * edges and a red, yellow, blue and purple beaded middle, a rosette at each
  * end.
  */
+/* Move a steadied edge only when the measured one is 2+ pixels away. */
+static int steady(int held, int seen)
+{
+    return (held < 0 || abs(seen - held) >= 2) ? seen : held;
+}
+
 static void draw_band(mascot_t *m, int top)
 {
     static const uint32_t BEADS[] = { 0xd2302a, 0xf2c230, 0x2f6fd8, 0x7a3fb0, 0x2f6fd8, 0xf2c230 };
     int left = -1, right = -1;
+    /* The ends, from the middle row (see mascot_t.band_l). */
+    {
+        int y = top + BAND_ROW + BAND_ROWS / 2;
+        for (int x = 8; y >= 0 && y < MUSE_PX_H && x < MUSE_PX_W - 8; x++) {
+            if (grid[y * MUSE_PX_W + x] == OUTLINE_565) {
+                if (left < 0) {
+                    left = x;
+                }
+                right = x;
+            }
+        }
+        if (left >= 0 && right - left >= 4) {
+            m->band_l = steady(m->band_l, left);
+            m->band_r = steady(m->band_r, right);
+        }
+    }
     for (int r = 0; r < BAND_ROWS; r++) {
         int y = top + BAND_ROW + r;
         if (y < 0 || y >= MUSE_PX_H) {
@@ -354,20 +380,17 @@ static void draw_band(mascot_t *m, int top)
         }
         for (int x = first; x <= last; x++) {
             uint32_t c = 0xe9e4d8; /* white bead edge */
-            if (r == BAND_ROWS / 2) {
-                c = BEADS[(x - first) % 6];
+            if (r == BAND_ROWS / 2 && m->band_l >= 0) {
+                /* The pattern counts from the steady end, so it doesn't crawl. */
+                c = BEADS[(x - m->band_l + 60) % 6];
             }
             paint(m, x, y, c);
         }
-        if (r == BAND_ROWS / 2) {
-            left = first;
-            right = last;
-        }
     }
-    if (left >= 0) {
+    if (m->band_l >= 0) {
         int y = top + BAND_ROW + BAND_ROWS / 2;
-        draw_rosette(m, left + 1, y, 1);
-        draw_rosette(m, right - 1, y, -1);
+        draw_rosette(m, m->band_l + 1, y, 1);
+        draw_rosette(m, m->band_r - 1, y, -1);
     }
 }
 
@@ -408,5 +431,7 @@ void todo_mascot_draw(lv_obj_t *root, const todo_mascot_pose_t *pose)
 
     /* The crown lifts and leans with the pose; its base stays in the head. */
     lv_obj_set_pos(m->crest, 0, -(int32_t)lroundf((CROWN_RISE + pose->crest_lift) * (float)m->cell));
-    draw_crest(m, (float)cx, (float)(top + CROWN_DEPTH), pose->crest_tilt * 20.0f);
+    /* Centred on the steadied band, so the crown stays put between the rosettes. */
+    float crown_x = m->band_l >= 0 ? (float)(m->band_l + m->band_r + 1) / 2.0f : (float)cx;
+    draw_crest(m, crown_x, (float)(top + CROWN_DEPTH), pose->crest_tilt * 20.0f);
 }
