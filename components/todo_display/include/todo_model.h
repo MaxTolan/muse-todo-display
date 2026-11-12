@@ -221,9 +221,15 @@ int todo_model_ongoing_visible(const todo_model_t *m);
 int todo_model_outbox_count(const todo_model_t *m);
 
 /*
- * The todo.set_list / todo.set_ongoing return payload: {"shown":N,"pending":[ids]},
- * where shown counts that kind's items on screen and pending is every
- * completion still being reported. Returns false if it didn't fit in len.
+ * The todo.set_list / todo.set_ongoing return payload, for that kind of item:
+ *   {"received":N,"open":N,"done":N,"shown":N,"pending":[ids]}
+ * received: items from the latest push the board holds (the delivery check:
+ *   it equals the number sent). open + done == received; done counts items
+ *   Muse marked done and ones the owner ticked off (past the undo window).
+ * shown: rows on screen right now. Done items cross out and leave the list,
+ *   so this falls as items are completed and is 0 on the all-done screen.
+ * pending: every completion still being reported back to Muse (issue #13).
+ * Returns false if it didn't fit in len.
  */
 bool todo_model_list_result(const todo_model_t *m, bool ongoing, char *out, size_t len);
 

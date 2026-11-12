@@ -309,8 +309,11 @@ static void register_commands(cJSON *commands)
     cJSON_AddItemToObject(opt, "date", string_param("The day the list is for, shown at the top."));
     add_command(commands, "todo.set_list",
                 "Replace the owner's daily desk todo list (ongoing tasks are separate: todo.set_ongoing). "
-                "Send the whole list each morning and whenever anything changes. Returns how many are "
-                "shown and the ids still being reported back.",
+                "Send the whole list each morning and whenever anything changes. Returns received (items "
+                "the board accepted from this push: check it equals how many you sent), open and done "
+                "(done includes items the owner ticked off), shown (rows on screen now: done items leave "
+                "the list, so this is not a delivery count and is 0 when all are done) and pending (ids "
+                "of completions still being reported back).",
                 req, opt);
 
     cJSON *oreq = cJSON_CreateObject();
@@ -320,7 +323,8 @@ static void register_commands(cJSON *commands)
         "Max 15."));
     add_command(commands, "todo.set_ongoing",
                 "Replace the owner's ongoing (multi-day) tasks, shown in their own section. "
-                "todo.set_list never changes them; leave a task out here to remove it.",
+                "todo.set_list never changes them; leave a task out here to remove it. Returns the same "
+                "received/open/done/shown/pending counts as todo.set_list, for ongoing tasks.",
                 oreq, NULL);
 
     cJSON *mreq = cJSON_CreateObject();

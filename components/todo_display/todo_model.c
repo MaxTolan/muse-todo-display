@@ -1017,12 +1017,20 @@ int todo_model_ongoing_visible(const todo_model_t *m)
 
 bool todo_model_list_result(const todo_model_t *m, bool ongoing, char *out, size_t len)
 {
-    int shown = 0;
+    int received = 0, done = 0, shown = 0;
     for (size_t i = 0; i < m->count; i++) {
         const todo_item_t *it = &m->items[i];
-        shown += it->in_list && it->ongoing == ongoing && todo_model_item_visible(it);
+        if (!it->in_list || it->ongoing != ongoing) {
+            continue; /* the other list, or a completion only the outbox still holds */
+        }
+        received++;
+        /* Done whether Muse says so or the owner ticked it (an undo window still
+         * running doesn't count: it can be taken back). */
+        done += it->state != TODO_ROW_OPEN && it->state != TODO_ROW_UNDO;
+        shown += todo_model_item_visible(it);
     }
-    size_t used = (size_t)snprintf(out, len, "{\"shown\":%d,\"pending\":[", shown);
+    size_t used = (size_t)snprintf(out, len, "{\"received\":%d,\"open\":%d,\"done\":%d,\"shown\":%d,\"pending\":[",
+                                   received, received - done, done, shown);
     bool first = true;
     for (size_t i = 0; i < m->count && used < len; i++) {
         if (!is_outbox(&m->items[i])) {

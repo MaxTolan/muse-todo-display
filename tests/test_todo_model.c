@@ -775,9 +775,9 @@ static void test_ongoing(void)
     CHECK(todo_model_ongoing_visible(&M) == 2);
     char out[256];
     CHECK(todo_model_list_result(&M, true, out, sizeof(out)));
-    CHECK_STR(out, "{\"shown\":2,\"pending\":[]}");
+    CHECK_STR(out, "{\"received\":2,\"open\":2,\"done\":0,\"shown\":2,\"pending\":[]}");
     CHECK(todo_model_list_result(&M, false, out, sizeof(out)));
-    CHECK_STR(out, "{\"shown\":3,\"pending\":[]}");
+    CHECK_STR(out, "{\"received\":3,\"open\":3,\"done\":0,\"shown\":3,\"pending\":[]}");
 
     /* A daily-only push leaves the ongoing tasks alone, and vice versa. */
     CHECK(push("[{\"id\":\"sun@1008\",\"label\":\"Sunlight\",\"source\":\"manual\"}]"));
@@ -995,9 +995,50 @@ static void test_list_result(void)
     run(TODO_UNDO_MS + 100);
     char out[256];
     CHECK(todo_model_list_result(&M, false, out, sizeof(out)));
-    CHECK_STR(out, "{\"shown\":3,\"pending\":[\"rosary@1007\"]}");
+    CHECK_STR(out, "{\"received\":3,\"open\":2,\"done\":1,\"shown\":3,\"pending\":[\"rosary@1007\"]}");
     char tiny[8];
     CHECK(!todo_model_list_result(&M, false, tiny, sizeof(tiny)));
+}
+
+/* Issue #13: identical pushes keep received steady while shown falls as the
+ * owner ticks items off; with everything done, shown is 0 but received is not. */
+static void test_list_result_counts(void)
+{
+    setup("list_result_counts");
+    char out[256];
+    push(DAY);
+    CHECK(todo_model_list_result(&M, false, out, sizeof(out)));
+    CHECK_STR(out, "{\"received\":3,\"open\":3,\"done\":0,\"shown\":3,\"pending\":[]}");
+
+    /* Tapped: open (and still shown) through the undo window. */
+    todo_model_tap(&M, "rosary@1007", T);
+    push(DAY);
+    CHECK(todo_model_list_result(&M, false, out, sizeof(out)));
+    CHECK_STR(out, "{\"received\":3,\"open\":3,\"done\":0,\"shown\":3,\"pending\":[]}");
+
+    /* Reported and acked, then Muse pushes it done: the row leaves the list,
+     * shown drops, and received still says all 3 arrived. */
+    run(TODO_UNDO_MS + 100);
+    todo_model_turn_acked(&M, T);
+    const char *one_done =
+        "[{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\",\"done\":true},"
+        "{\"id\":\"vit-am@1007\",\"label\":\"Vitamins AM\",\"source\":\"manual\"},"
+        "{\"id\":\"steps@1007\",\"label\":\"10,000 steps\",\"source\":\"healthkit\",\"done\":false}]";
+    CHECK(push(one_done));
+    run(10 * 60 * 1000);
+    CHECK(push(one_done)); /* an identical push: same counts */
+    CHECK(todo_model_list_result(&M, false, out, sizeof(out)));
+    CHECK_STR(out, "{\"received\":3,\"open\":2,\"done\":1,\"shown\":2,\"pending\":[]}");
+
+    /* Everything done (the all-done screen): nothing shown, all 3 received. */
+    const char *all_done =
+        "[{\"id\":\"rosary@1007\",\"label\":\"Rosary\",\"source\":\"manual\",\"done\":true},"
+        "{\"id\":\"vit-am@1007\",\"label\":\"Vitamins AM\",\"source\":\"manual\",\"done\":true},"
+        "{\"id\":\"steps@1007\",\"label\":\"10,000 steps\",\"source\":\"healthkit\",\"done\":true}]";
+    CHECK(push(all_done));
+    run(10 * 60 * 1000);
+    CHECK(todo_model_list_result(&M, false, out, sizeof(out)));
+    CHECK_STR(out, "{\"received\":3,\"open\":0,\"done\":3,\"shown\":0,\"pending\":[]}");
 }
 
 static void test_source_labels(void)
@@ -1035,6 +1076,7 @@ int main(void)
     test_message_bar();
     test_reboot_keeps_outbox_and_list();
     test_list_result();
+    test_list_result_counts();
     test_source_labels();
     if (s_failures) {
         fprintf(stderr, "%d check(s) failed\n", s_failures);

@@ -38,7 +38,16 @@ day (HealthKit completions, new reminders, edits).
     value never locks a row; any non-manual value is shown as a tag. New sources need no
     firmware change. (Muse once sent `daily`, `one-off` and `ongoing` here: owner, Oct 15.)
   - `done` — `true` for items Muse already considers complete.
-- Returns `{"ok": true, "payload": {"shown": N, "pending": [ids in the outbox]}}`.
+- Returns `{"ok": true, "payload": {"received": N, "open": N, "done": N, "shown": N, "pending": [ids]}}`
+  (issue #13):
+  - `received` — items from this push the board now holds. **This is the delivery check:** it
+    equals the number of items sent.
+  - `open` / `done` — of those, still to do and complete (`open + done == received`). `done`
+    includes items the owner ticked off on the board whose report hasn't reached Muse yet;
+    an item still in its undo window counts as open.
+  - `shown` — list rows on screen right now. Done items cross out and leave the list, so this
+    falls as the day goes on and is 0 on the all-done screen. Not a delivery count.
+  - `pending` — ids of completions still being reported back to Muse (the outbox).
 - Validate everything yourself (the SDK doesn't): reject non-arrays, missing/overlong fields,
   and lists over a sane cap (e.g. 40 items, 120-char labels). The SDK sets cJSON's nesting
   limit to 16; this shape is well under it.
@@ -55,8 +64,8 @@ tasks, and leaving a task out of `todo.set_ongoing` removes it.
 - `id`: **stable, no date** (e.g. `vpop-agent`), unlike daily items.
 - An id belongs to one list: sending a daily item's id here (or an ongoing id to `todo.set_list`)
   is rejected.
-- Returns `{"ok": true, "payload": {"shown": N, "pending": [ids in the outbox]}}`, where `shown`
-  counts ongoing tasks on screen.
+- Returns the same `{received, open, done, shown, pending}` payload as `todo.set_list`, counting
+  ongoing tasks.
 - Ongoing tasks don't count toward "N of M done" or the all-done celebration (owner, Oct 12).
 
 ### `todo.show_message`
